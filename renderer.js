@@ -93,11 +93,17 @@ async function checkUpdates() {
 
   try {
     const status = await window.api.checkForUpdate();
-    if (status && status.updateAvailable) {
-      updateText.innerHTML = `Yeni Sürüm Mevcut: <strong>v${status.remoteVersion}</strong> (Mevcut: v${status.localVersion})`;
-      updateBanner.classList.remove('hidden');
-    } else {
-      updateBanner.classList.add('hidden');
+    if (status) {
+      const versionTextEl = document.getElementById('app-version-text');
+      if (versionTextEl && status.localVersion) {
+        versionTextEl.textContent = `Sürüm: v${status.localVersion}`;
+      }
+      if (status.updateAvailable) {
+        updateText.innerHTML = `Yeni Sürüm Mevcut: <strong>v${status.remoteVersion}</strong> (Mevcut: v${status.localVersion})`;
+        updateBanner.classList.remove('hidden');
+      } else {
+        updateBanner.classList.add('hidden');
+      }
     }
   } catch (err) {
     console.error('Update check failed:', err);
