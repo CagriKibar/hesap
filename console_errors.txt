@@ -1,0 +1,17 @@
+[Renderer] %cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged. (line 2 in node:electron/js2c/sandbox_bundle)
+[Renderer] --- Automated Test Started --- (line 3 in )
+[Renderer] Logged in successfully (line 7 in )
+[Renderer] [Calc] qty=1, basePrice=140, purchasePrice=100, bagWeight=50 (line 469 in file:///C:/Users/User/Desktop/HESAPLA/renderer.js)
+[Renderer] [Calc] uQtyType=TORBA, uPurType=TORBA, uSelType=TON (line 470 in file:///C:/Users/User/Desktop/HESAPLA/renderer.js)
+[Renderer] [Calc] purConversionFactor=1, selConversionFactor=0.05 (line 471 in file:///C:/Users/User/Desktop/HESAPLA/renderer.js)
+[Renderer] [Calc] convertedPurchasePrice=100, convertedBasePrice=7 (line 472 in file:///C:/Users/User/Desktop/HESAPLA/renderer.js)
+[Renderer] [Calc] totalVadeSurcharge=0, shipCost=0, unloadCost=0 (line 473 in file:///C:/Users/User/Desktop/HESAPLA/renderer.js)
+[Renderer] [Calc] unitExtraCost=0, unitBasePrice=7, unitCost=100 (line 474 in file:///C:/Users/User/Desktop/HESAPLA/renderer.js)
+[Renderer] Calculation input entered (line 13 in )

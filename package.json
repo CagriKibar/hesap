@@ -1,0 +1,56 @@
+{
+  "name": "hausmart-satis-takip",
+  "version": "1.0.0",
+  "description": "Hausmart Fiyatlandırma & Satış Takip Sistemi",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "server": "node server.js",
+    "build": "electron-builder"
+  },
+  "keywords": [
+    "hausmart",
+    "sales",
+    "electron",
+    "sqlite"
+  ],
+  "author": "Hausmart Development Team",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "exceljs": "^4.4.0",
+    "express": "^4.19.2",
+    "pdfkit": "^0.15.0",
+    "sql.js": "^1.10.3"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.hausmart.satistakip",
+    "productName": "Hausmart Satis",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "hausmart_icon.ico"
+    },
+    "nsis": {
+      "oneClick": true,
+      "allowToChangeInstallationDirectory": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Hausmart Satis"
+    },
+    "files": [
+      "**/*",
+      "!dist/*",
+      "!satis_hesap.py",
+      "!satis_server.py",
+      "!setup_client.py",
+      "!setup_server.py"
+    ]
+  }
+}

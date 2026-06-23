@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <title>Hausmart Fiyatlandırma & Satış Takip Sistemi</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- ==================== GİRİŞ EKRANI ==================== -->
+  <div id="login-container" class="page-container">
+    <div class="login-card">
+      <div class="login-header">
+        <div class="logo">
+          <svg width="40" height="40" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect width="32" height="32" rx="8" fill="#1E1E2E"/>
+            <!-- Purple Chevron -->
+            <path d="M8 8L16 16L8 24" stroke="#6C5CE7" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+            <!-- Cyan Chevron -->
+            <path d="M16 8L24 16L16 24" stroke="#00D2FF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <h2>Hausmart Giriş Paneli</h2>
+        <p class="subtitle">Satış Takip & Fiyatlandırma Portal</p>
+      </div>
+
+      <div class="form-group">
+        <label for="login-username">Kullanıcı Adı</label>
+        <input type="text" id="login-username" placeholder="Kullanıcı adınızı girin">
+      </div>
+
+      <div class="form-group">
+        <label for="login-password">Şifre</label>
+        <input type="password" id="login-password" placeholder="Şifrenizi girin">
+      </div>
+
+      <div class="form-actions">
+        <button id="btn-login" class="btn btn-primary btn-block">Giriş Yap</button>
+      </div>
+
+      <div class="login-footer">
+        <div class="flex-row gap-10 justify-between align-center" style="width: 100%;">
+          <button id="btn-open-conn-settings" class="btn btn-link">⚙ Bağlantı Ayarları</button>
+          <button id="btn-toggle-theme-login" class="btn btn-link" style="text-decoration: none;">🌓 Tema Değiştir</button>
+        </div>
+        <div id="login-mode-indicator" class="mode-indicator">
+          Yükleniyor...
+        </div>
+        <div id="update-banner" class="hidden" style="margin-top: 15px; padding: 10px; border-radius: 6px; background-color: rgba(0, 210, 255, 0.1); border: 1px solid #00d2ff; text-align: center; width: 100%;">
+          <span id="update-text" style="font-size: 0.9rem; display: block; margin-bottom: 8px; color: var(--text-primary);">Yeni sürüm mevcut!</span>
+          <button id="btn-install-update" class="btn btn-primary btn-sm" style="width: 100%;">Son Sürüme Güncelle</button>
+        </div>
+        <div class="login-signature">
+          <a href="#" id="link-signature-login" class="signature-link">Kuisoft</a>
+        </div>
+        <div style="font-size: 0.8rem; color: var(--text-secondary); text-align: center; margin-top: 5px;" id="app-version-text">
+          Sürüm: v1.0.0
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== ANA DASHBOARD ==================== -->
+  <div id="dashboard-container" class="page-container hidden">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="brand">
+        <svg width="24" height="24" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect width="32" height="32" rx="8" fill="#1E1E2E"/>
+          <path d="M8 8L16 16L8 24" stroke="#6C5CE7" stroke-width="3" stroke-linecap="round"/>
+          <path d="M16 8L24 16L16 24" stroke="#00D2FF" stroke-width="3" stroke-linecap="round"/>
+        </svg>
+        <span>Hausmart</span>
+      </div>
+      
+      <!-- Nav Tabs -->
+      <nav class="nav-tabs">
+        <button class="tab-link active" data-tab="tab-hesapla">Fiyat Hesaplama ve Satış</button>
+        <button class="tab-link" data-tab="tab-hareketler">Son Hareketler & İrsaliye</button>
+        <button class="tab-link" data-tab="tab-gecmis">Ürün Fiyat Geçmişi</button>
+        <button class="tab-link hidden" id="nav-btn-kullanicilar" data-tab="tab-kullanicilar">⚙ Kullanıcı Yönetimi</button>
+        <button class="tab-link hidden" id="nav-btn-sunucu" data-tab="tab-sunucu">Sunucu Yönetimi</button>
+      </nav>
+
+      <div class="user-profile">
+        <button id="btn-toggle-theme" class="btn btn-outline btn-sm" style="margin-right: 5px; font-size: 1rem; padding: 4px 8px;" title="Tema Değiştir">🌓</button>
+        <div class="user-info">
+          <span id="current-user-name">-</span>
+          <span id="current-user-role" class="badge badge-purple">-</span>
+        </div>
+        <button id="btn-logout" class="btn btn-outline btn-sm">Çıkış Yap</button>
+      </div>
+    </header>
+
+    <!-- Main Content Panels -->
+    <main class="app-content">
+
+      <!-- SEKME 1: HESAPLAMA VE SATIŞ -->
+      <section id="tab-hesapla" class="tab-panel active">
+        <div class="panel-grid">
+          
+          <!-- Column left: Input Forms -->
+          <div class="panel-column">
+            <!-- 1. Ürün ve Müşteri Bilgileri Card -->
+            <div class="card">
+              <div class="card-header">
+                <h3>Ürün ve Müşteri Bilgileri</h3>
+              </div>
+              <div class="card-body">
+                <div class="form-row">
+                  <div class="form-group col-6">
+                    <label for="cust-name">Müşteri Adı / Unvanı</label>
+                    <input type="text" id="cust-name" placeholder="Müşteri adını girin">
+                  </div>
+                  <div class="form-group col-6">
+                    <label for="prod-name">Ürün Adı / Kodu (*)</label>
+                    <input type="text" id="prod-name" placeholder="Ürün adını girin">
+                  </div>
+                </div>
+
+                <div class="form-row">
+                  <div class="form-group col-4">
+                    <label for="unit-type">Miktar Birimi</label>
+                    <select id="unit-type">
+                      <option value="TORBA" selected>TORBA</option>
+                      <option value="KG">KG</option>
+                      <option value="TON">TON</option>
+                      <option value="M2">M2</option>
+                    </select>
+                  </div>
+                  <div class="form-group col-4">
+                    <label for="qty">Miktar</label>
+                    <input type="text" id="qty" value="1">
+                  </div>
+                  <div class="form-group col-4">
+                    <label for="bag-weight">Torba Ağırlığı (kg)</label>
+                    <input type="text" id="bag-weight" value="50">
+                  </div>
+                </div>
+
+                <div class="form-row">
+                  <div class="form-group col-6 manager-only hidden">
+                    <label for="purchase-price">Alış Fiyati (Opsiyonel)</label>
+                    <input type="text" id="purchase-price" placeholder="0.00">
+                  </div>
+                  <div class="form-group col-6 manager-only hidden">
+                    <label for="purchase-price-type">Alış Fiyat Birimi</label>
+                    <select id="purchase-price-type">
+                      <option value="TORBA" selected>TORBA</option>
+                      <option value="KG">KG</option>
+                      <option value="TON">TON</option>
+                      <option value="M2">M2</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="form-row">
+                  <div class="form-group col-6">
+                    <label for="base-price">Baz Satış Fiyatı (*)</label>
+                    <input type="text" id="base-price" placeholder="0.00">
+                  </div>
+                  <div class="form-group col-6">
+                    <label for="base-price-type">Satış Fiyat Birimi</label>
+                    <select id="base-price-type">
+                      <option value="TON" selected>TON</option>
+                      <option value="TORBA">TORBA</option>
+                      <option value="KG">KG</option>
+                      <option value="M2">M2</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="form-row">
+                  <div class="form-group col-12">
+                    <label for="receipt-type">Fişe Yansıyacak Tür</label>
+                    <select id="receipt-type">
+                      <option value="Nakit" selected>Nakit</option>
+                      <option value="Kredi Kartı">Kredi Kartı</option>
+                      <option value="Çek">Çek</option>
+                      <option value="Senet">Senet</option>
+                      <option value="Evrak">Evrak</option>
+                      <option value="DBS">DBS</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div id="conversion-info-banner" class="info-banner hidden">
+                  <!-- Auto conversion message here -->
+                </div>
+              </div>
+            </div>
+
+            <!-- 2. Vadeli Satış Seçenekleri Card & Ek Hizmetler Card (Grid Layout) -->
+            <div class="grid-2-cols">
+              
+              <!-- Vade Card -->
+              <div class="card">
+                <div class="card-header">
+                  <h3>Vadeli Satış Seçenekleri</h3>
+                </div>
+                <div class="card-body">
+                  <div class="form-group">
+                    <label for="vade-months">Vade Süresi (Ay)</label>
+                    <select id="vade-months">
+                      <option value="0" selected>0 (Nakit)</option>
+                      <option value="1">1 Ay</option>
+                      <option value="2">2 Ay</option>
+                      <option value="3">3 Ay</option>
+                      <option value="4">4 Ay</option>
+                      <option value="5">5 Ay</option>
+                      <option value="6">6 Ay</option>
+                      <option value="7">7 Ay</option>
+                      <option value="8">8 Ay</option>
+                      <option value="9">9 Ay</option>
+                      <option value="10">10 Ay</option>
+                      <option value="11">11 Ay</option>
+                      <option value="12">12 Ay</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label for="vade-rate">Aylık Vade Farkı (%)</label>
+                    <input type="text" id="vade-rate" value="0">
+                  </div>
+                  <div class="vade-summary">
+                    <span>Ek Vade Farkı Yükü:</span>
+                    <strong id="lbl-vade-summary-pct">%0.00</strong>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Ek Hizmetler Card -->
+              <div class="card">
+                <div class="card-header">
+                  <h3>Ek Hizmetler (Tutar Üstüne)</h3>
+                </div>
+                <div class="card-body flex-column">
+                  <div class="checkbox-group">
+                    <label class="checkbox-container">
+                      <input type="checkbox" id="has-shipping">
+                      <span class="checkmark"></span>
+                      Nakliye Dahil
+                    </label>
+                    <input type="text" id="shipping-cost" placeholder="Maliyet ₺" class="input-inline" disabled>
+                  </div>
+                  <div class="checkbox-group">
+                    <label class="checkbox-container">
+                      <input type="checkbox" id="has-unloading">
+                      <span class="checkmark"></span>
+                      İndirme Dahil
+                    </label>
+                    <input type="text" id="unloading-cost" placeholder="Maliyet ₺" class="input-inline" disabled>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- 3. Ödeme Türü Baz Oranları Card -->
+            <div class="card">
+              <div class="card-header">
+                <h3>Ödeme Türü Baz Oranları (%)</h3>
+              </div>
+              <div class="card-body">
+                <div class="grid-6-cols">
+                  <div class="form-group">
+                    <label for="rate-cash">Nakit</label>
+                    <input type="text" id="rate-cash" value="0" class="rate-input">
+                  </div>
+                  <div class="form-group">
+                    <label for="rate-cc">K. Kartı</label>
+                    <input type="text" id="rate-cc" value="3" class="rate-input">
+                  </div>
+                  <div class="form-group">
+                    <label for="rate-check">Çek</label>
+                    <input type="text" id="rate-check" value="5" class="rate-input">
+                  </div>
+                  <div class="form-group">
+                    <label for="rate-note">Senet</label>
+                    <input type="text" id="rate-note" value="8" class="rate-input">
+                  </div>
+                  <div class="form-group">
+                    <label for="rate-doc">Evrak</label>
+                    <input type="text" id="rate-doc" value="4" class="rate-input">
+                  </div>
+                  <div class="form-group">
+                    <label for="rate-dbs">DBS</label>
+                    <input type="text" id="rate-dbs" value="2" class="rate-input">
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Column right: Analysis Grid & Actions -->
+          <div class="panel-column">
+            <div class="card fill-height flex-column">
+              <div class="card-header">
+                <h3>Kümülatif Fiyat Analizi</h3>
+              </div>
+              <div class="card-body flex-grow grid-container">
+                <div class="table-wrapper">
+                  <table id="analysis-table" class="data-table">
+                    <thead>
+                      <tr>
+                        <th>Ödeme Türü</th>
+                        <th>Baz Oran</th>
+                        <th>Küm. Oran</th>
+                        <th>1 Birim Fiyatı</th>
+                        <th>Toplam Tutar</th>
+                        <th class="manager-col hidden">Tahmini Kâr</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <!-- Calculations insert dynamically -->
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="card-footer">
+                <button id="btn-export-excel" class="btn btn-outline">Excel'e Aktar</button>
+                <div class="footer-right">
+                  <button id="btn-export-pdf" class="btn btn-secondary">Satış Çıktısı Al (PDF)</button>
+                  <button id="btn-save-sale" class="btn btn-success">Satışı Kaydet</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- SEKME 2: SON HAREKETLER & İRSALİYE -->
+      <section id="tab-hareketler" class="tab-panel">
+        <div class="card fill-height flex-column">
+          <div class="card-header flex-row justify-between align-center">
+            <h3>Son Satış Hareketleri</h3>
+            <button id="btn-refresh-sales" class="btn btn-outline btn-sm">🔄 Yenile</button>
+          </div>
+          <div class="card-body flex-grow grid-container">
+            <div class="table-wrapper">
+              <table id="sales-history-table" class="data-table">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Tarih</th>
+                    <th>Kullanıcı</th>
+                    <th>Müşteri</th>
+                    <th>Ürün</th>
+                    <th>Miktar</th>
+                    <th>Birim</th>
+                    <th>Toplam Tutar</th>
+                    <th class="manager-col hidden">Kâr</th>
+                    <th>İrsaliye Durumu</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <!-- Filled dynamically -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="card-footer flex-row justify-between">
+            <div class="actions-left flex-row">
+              <button id="btn-view-sale-detail" class="btn btn-outline">Satışı Görüntüle</button>
+              <button id="btn-upload-waybill" class="btn btn-outline">İrsaliye Yükle</button>
+              <button id="btn-view-waybill" class="btn btn-outline">İrsaliyeyi Görüntüle</button>
+              <button id="btn-reprint-pdf" class="btn btn-outline">PDF Fişi Tekrar Çıkar</button>
+              <button id="btn-detail-pdf" class="btn btn-outline">Detay PDF Çıkar</button>
+              <button id="btn-detail-excel" class="btn btn-outline">Excel Çıktısı Al</button>
+            </div>
+            <div class="actions-right manager-only hidden">
+              <button id="btn-delete-sale" class="btn btn-danger">Satışı Sil</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SEKME 3: ÜRÜN FİYAT GEÇMİŞİ -->
+      <section id="tab-gecmis" class="tab-panel">
+        <div class="card fill-height flex-column">
+          <div class="card-header flex-row align-center justify-start gap-15">
+            <h3>Ürün Geçmiş Fiyat Trendi</h3>
+            <div class="history-product-selector flex-row align-center gap-10">
+              <label for="history-product-dropdown">Ürün Seçin:</label>
+              <select id="history-product-dropdown" class="select-sm width-250">
+                <!-- Filled dynamically -->
+              </select>
+              <button id="btn-refresh-history-products" class="btn btn-outline btn-sm">Listeyi Yenile</button>
+            </div>
+          </div>
+          <div class="card-body flex-grow grid-container">
+            <div class="table-wrapper">
+              <table id="price-history-table" class="data-table">
+                <thead>
+                  <tr>
+                    <th>Satış Tarihi</th>
+                    <th>Müşteri</th>
+                    <th>Miktar</th>
+                    <th>Miktar Birimi</th>
+                    <th>Ödeme Türü</th>
+                    <th>Vade (Ay)</th>
+                    <th>Birim Satış Fiyatı</th>
+                    <th>Toplam Tutar</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <!-- Filled dynamically -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SEKME 4: KULLANICI YÖNETİMİ (Sadece Süper Admin) -->
+      <section id="tab-kullanicilar" class="tab-panel">
+        <div class="card fill-height flex-column">
+          <div class="card-header flex-row justify-between align-center">
+            <h3>Kullanıcı Yönetimi</h3>
+            <button id="btn-refresh-users" class="btn btn-outline btn-sm">Yenile</button>
+          </div>
+          <div class="card-body flex-grow grid-container">
+            <div class="table-wrapper">
+              <table id="users-table" class="data-table">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Kullanıcı Adı</th>
+                    <th>Rol</th>
+                    <th>Durum</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <!-- Filled dynamically -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="card-footer">
+            <button id="btn-add-user" class="btn btn-success">➕ Kullanıcı Ekle</button>
+            <button id="btn-edit-user" class="btn btn-outline">✏ Bilgileri Güncelle</button>
+            <button id="btn-reset-password" class="btn btn-outline">🔑 Şifre Sıfırla</button>
+            <button id="btn-toggle-user" class="btn btn-outline">🔄 Aktif / Pasif</button>
+            <button id="btn-delete-user" class="btn btn-danger float-right">🗑 Kullanıcıyı Sil</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- SEKME 5: SUNUCU VE AĞ YÖNETİMİ (Sadece Süper Admin) -->
+      <section id="tab-sunucu" class="tab-panel">
+        <div class="panel-2-cols">
+          
+          <div class="panel-column flex-column gap-15">
+            <!-- Connection Status -->
+            <div class="card">
+              <div class="card-header">
+                <h3>Mevcut Bağlantı Durumu</h3>
+              </div>
+              <div class="card-body">
+                <div class="status-list">
+                  <div class="status-item">
+                    <span>Bağlantı Modu:</span>
+                    <strong id="server-lbl-mode">-</strong>
+                  </div>
+                  <div class="status-item">
+                    <span>DB Dosya Yolu:</span>
+                    <span id="server-lbl-db-path" class="path-text">-</span>
+                  </div>
+                  <div id="server-row-api-url" class="status-item hidden">
+                    <span>İstemci Sunucu URL:</span>
+                    <span id="server-lbl-api-url" class="path-text">-</span>
+                  </div>
+                </div>
+                <div class="card-actions-row">
+                  <button id="server-btn-change-conn" class="btn btn-primary">⚙ Bağlantı Ayarlarını Değiştir</button>
+                  <button id="server-btn-show-db-folder" class="btn btn-outline">📁 DB Dosyasını Göster</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Built-in API Host -->
+            <div class="card">
+              <div class="card-header">
+                <h3>Bu Bilgisayarın Ağ Adresleri (Local Server Host)</h3>
+              </div>
+              <div class="card-body">
+                <p class="desc-text">Eğer bu bilgisayarı ağdaki diğer istemcilerin bağlanacağı **Ana Sunucu** yapacaksanız, aşağıdaki ağ adreslerini kopyalayıp diğer bilgisayarlardaki istemci ayarlarına girmelisiniz.</p>
+                
+                <div id="local-ips-list" class="ip-address-list">
+                  <!-- IPs inserted dynamically -->
+                </div>
+                
+                <div class="server-control-box">
+                  <div class="server-status-indicator">
+                    <span>Entegre REST API Sunucusu:</span>
+                    <strong id="lbl-integrated-server-status" class="status-off">⏹ Durduruldu</strong>
+                  </div>
+                  <div class="server-control-actions">
+                    <div class="form-group width-100">
+                      <label for="integrated-server-port">Server Port</label>
+                      <input type="number" id="integrated-server-port" value="8765">
+                    </div>
+                    <button id="btn-toggle-integrated-server" class="btn btn-success">▶ Sunucuyu Başlat</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Documentation / Instructions -->
+          <div class="panel-column">
+            <div class="card fill-height">
+              <div class="card-header">
+                <h3>Sunucu Kurulum Talimatları</h3>
+              </div>
+              <div class="card-body doc-content">
+                <ol class="setup-steps">
+                  <li>
+                    <strong>Yerel Kullanım:</strong>
+                    <p>Uygulamayı tek bir bilgisayarda kullanıyorsanız bağlantı modunu "Yerel Mod" olarak bırakın. Veritabanınız bilgisayarınızda yerel olarak saklanır.</p>
+                  </li>
+                  <li>
+                    <strong>Ortak Ağ Paylaşımı (Ağ SQL):</strong>
+                    <p>Birden fazla bilgisayarın aynı veritabanına doğrudan bağlanması için, veritabanı dosyasını (`satis_takip.db`) ortak bir ağ klasörüne yerleştirin. Diğer bilgisayarlardan "Bağlantı Ayarları" -> "Ağ Paylaşım Modu" seçip ağ yolunu (örn: `\\SUNUCU-PC\Paylasim\satis_takip.db`) yazın.</p>
+                  </li>
+                  <li>
+                    <strong>HTTP Server/Client Kurulumu (Gelişmiş):</strong>
+                    <p>Uygulamayı tam bir istemci-sunucu mimarisine çevirmek için:</p>
+                    <ul>
+                      <li>Ana sunucu bilgisayarında "Entegre REST API Sunucusu"nu başlatın veya `server.js` dosyasını harici bir sunucuda çalıştırın.</li>
+                      <li>Sunucunun IP adresini ("Bu Bilgisayarın Ağ Adresleri" listesinden) kopyalayın.</li>
+                      <li>Diğer tüm istemci bilgisayarlarında: "Bağlantı Ayarları" -> "HTTP İstemci Modu" seçip bu adresi girin.</li>
+                    </ul>
+                  </li>
+                </ol>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+    </main>
+    <footer class="app-footer">
+      <span>Hausmart Fiyatlandırma & Satış Takip Sistemi</span>
+      <span>Tüm Hakları Saklıdır &copy; 2026 | <a href="#" id="link-signature-dashboard" class="signature-link">Kuisoft</a></span>
+    </footer>
+  </div>
+
+  <!-- ==================== DIALOGS & MODALS ==================== -->
+
+  <!-- Modal Backdrop -->
+  <div id="modal-backdrop" class="modal-backdrop hidden"></div>
+
+  <!-- 1. BAĞLANTI AYARLARI MODAL -->
+  <div id="modal-conn-settings" class="modal-card hidden">
+    <div class="modal-header">
+      <h3>Bağlantı Ayarları</h3>
+      <button class="btn-close-modal">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Bağlantı Modu Seçin</label>
+        
+        <label class="radio-container">
+          <input type="radio" name="conn-mode" value="yerel" checked>
+          <span class="radio-checkmark"></span>
+          Yerel Mod (Sadece bu bilgisayar)
+        </label>
+        
+        <label class="radio-container">
+          <input type="radio" name="conn-mode" value="paylasim">
+          <span class="radio-checkmark"></span>
+          Ağ Paylaşım Modu (Ağ üzerindeki SQLite dosyası)
+        </label>
+        <div id="conn-row-db-path" class="modal-sub-form hidden">
+          <label for="conn-db-path">Ağ DB Dosya Yolu</label>
+          <input type="text" id="conn-db-path" placeholder="\\SUNUCU-PC\Paylasim\satis_takip.db">
+          <span class="help-text">Örnek: \\SUNUCU-PC\Paylasim\satis_takip.db</span>
+        </div>
+
+        <label class="radio-container">
+          <input type="radio" name="conn-mode" value="istemci">
+          <span class="radio-checkmark"></span>
+          HTTP İstemci Modu (Sunucu API'sine bağlan)
+        </label>
+        <div id="conn-row-server-url" class="modal-sub-form hidden">
+          <label for="conn-server-url">Sunucu API Adresi</label>
+          <input type="text" id="conn-server-url" placeholder="http://192.168.1.100:8765">
+          <span class="help-text">Örnek: http://192.168.1.100:8765</span>
+        </div>
+      </div>
+      <!-- Connection Guide / Troubleshoot -->
+      <div class="troubleshoot-box" style="margin-top: 15px; padding: 12px; background-color: rgba(108, 92, 231, 0.05); border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.8rem; line-height: 1.4;">
+        <strong style="color: var(--primary-color); display: block; margin-bottom: 6px;">💡 Ağ Bağlantısı İpuçları (Sunucu & İstemci):</strong>
+        <ul style="margin-left: 15px; color: var(--text-secondary);">
+          <li style="margin-bottom: 4px;"><strong>Yerel Yol Hatası:</strong> İstemci bilgisayarda `C:\` gibi yerel yollar girilirse sunucuya bağlanamaz. Bu yollar sadece o bilgisayarda geçerlidir.</li>
+          <li style="margin-bottom: 4px;"><strong>Ağ Paylaşımı (UNC):</strong> Ağ Paylaşım modunda sunucu bilgisayardaki klasörü paylaşıma açmalı ve `\\SUNUCU-PC\Paylasim\satis_takip.db` şeklinde UNC ağ yolu girmelisiniz.</li>
+          <li style="margin-bottom: 4px;"><strong>HTTP Sunucu (Önerilen):</strong> Router/Ağ üzerinden en sorunsuz bağlantı için sunucu bilgisayarda "Entegre API Sunucusunu" başlatın. İstemci bilgisayarlarda "HTTP İstemci Modu" seçip sunucu IP adresini (örn: `http://192.168.1.100:8765`) girin.</li>
+          <li><strong>Güvenlik Duvarı Engeli:</strong> Bağlantı kurulamazsa, sunucu bilgisayarda **Windows Defender Güvenlik Duvarı** ayarlarına girip **8765** portu için "Gelen Kuralları"ndan yeni bir izin kuralı oluşturun.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button id="btn-test-conn-settings" class="btn btn-outline">Bağlantıyı Test Et</button>
+      <div class="footer-right">
+        <button class="btn btn-outline btn-close-modal">İptal</button>
+        <button id="btn-save-conn-settings" class="btn btn-primary">Kaydet</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. SATIŞ DETAY MODAL -->
+  <div id="modal-sale-details" class="modal-card hidden">
+    <div class="modal-header">
+      <h3 id="detail-title">Satış Detayı - ID: -</h3>
+      <button class="btn-close-modal">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="details-grid">
+        <div class="detail-row"><strong>Tarih:</strong> <span id="det-tarih">-</span></div>
+        <div class="detail-row"><strong>Satışı Yapan:</strong> <span id="det-kullanici">-</span></div>
+        <div class="detail-row"><strong>Müşteri:</strong> <span id="det-musteri">-</span></div>
+        <div class="detail-row"><strong>Ürün Adı:</strong> <span id="det-urun">-</span></div>
+        <div class="detail-row"><strong>Miktar:</strong> <span id="det-miktar">-</span></div>
+        <div class="detail-row"><strong>Fiyat Birimi:</strong> <span id="det-fiyat-birimi">-</span></div>
+        <div id="det-row-torba" class="detail-row hidden"><strong>Torba Ağırlığı:</strong> <span id="det-torba">-</span></div>
+        <div class="detail-row"><strong>Ödeme Türü:</strong> <span id="det-odeme">-</span></div>
+        <div class="detail-row"><strong>Vade:</strong> <span id="det-vade">-</span></div>
+        <div class="detail-row"><strong>Birim Fiyat:</strong> <span id="det-birim-fiyat">-</span></div>
+        <div class="detail-row"><strong>Toplam Tutar:</strong> <span id="det-toplam">-</span></div>
+        <div class="detail-row manager-only hidden"><strong>Alış Fiyatı:</strong> <span id="det-alis">-</span></div>
+        <div class="detail-row manager-only hidden"><strong>Toplam Kâr:</strong> <span id="det-kar">-</span></div>
+        <div class="detail-row"><strong>İrsaliye Durumu:</strong> <span id="det-irsaliye">-</span></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary btn-close-modal">Kapat</button>
+    </div>
+  </div>
+
+  <!-- 3. KULLANICI EKLE MODAL -->
+  <div id="modal-add-user" class="modal-card hidden">
+    <div class="modal-header">
+      <h3>Yeni Kullanıcı Ekle</h3>
+      <button class="btn-close-modal">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label for="usr-add-name">Kullanıcı Adı</label>
+        <input type="text" id="usr-add-name" placeholder="Kullanıcı adı girin">
+      </div>
+      <div class="form-group">
+        <label for="usr-add-pass">Şifre</label>
+        <input type="password" id="usr-add-pass" placeholder="Geçici şifre girin">
+      </div>
+      <div class="form-group">
+        <label for="usr-add-role">Rol</label>
+        <select id="usr-add-role">
+          <option value="Personel" selected>Personel</option>
+          <option value="Yönetici">Yönetici</option>
+          <option value="Süper Admin">Süper Admin</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline btn-close-modal">İptal</button>
+      <button id="btn-save-add-user" class="btn btn-success">Kaydet</button>
+    </div>
+  </div>
+
+  <!-- 4. KULLANICI GÜNCELLE MODAL -->
+  <div id="modal-edit-user" class="modal-card hidden">
+    <div class="modal-header">
+      <h3 id="edit-user-title">Kullanıcı Bilgileri Güncelle</h3>
+      <button class="btn-close-modal">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="usr-edit-id">
+      <div class="form-group">
+        <label for="usr-edit-name">Yeni Kullanıcı Adı</label>
+        <input type="text" id="usr-edit-name">
+      </div>
+      <div class="form-group">
+        <label for="usr-edit-role">Rol</label>
+        <select id="usr-edit-role">
+          <option value="Personel">Personel</option>
+          <option value="Yönetici">Yönetici</option>
+          <option value="Süper Admin">Süper Admin</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline btn-close-modal">İptal</button>
+      <button id="btn-save-edit-user" class="btn btn-primary">Güncelle</button>
+    </div>
+  </div>
+
+  <!-- 5. ŞİFRE SIFIRLA MODAL -->
+  <div id="modal-reset-password" class="modal-card hidden">
+    <div class="modal-header">
+      <h3 id="reset-pass-title">Şifre Sıfırla</h3>
+      <button class="btn-close-modal">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="usr-reset-id">
+      <div class="form-group">
+        <label for="usr-reset-pass1">Yeni Şifre</label>
+        <input type="password" id="usr-reset-pass1" placeholder="Yeni şifre girin">
+      </div>
+      <div class="form-group">
+        <label for="usr-reset-pass2">Şifre Tekrarı</label>
+        <input type="password" id="usr-reset-pass2" placeholder="Şifreyi tekrar yazın">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline btn-close-modal">İptal</button>
+      <button id="btn-save-reset-pass" class="btn btn-primary">Şifreyi Sıfırla</button>
+    </div>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>

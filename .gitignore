@@ -1,0 +1,8 @@
+node_modules/
+node_temp/
+dist/
+satis_takip.db
+config.json
+update.zip
+update_temp/
+.env*
