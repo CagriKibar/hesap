@@ -110,6 +110,45 @@ async function checkUpdates() {
   }
 }
 
+async function handleManualUpdateCheck() {
+  const btn = document.getElementById('btn-check-update-manual');
+  const updateBanner = document.getElementById('update-banner');
+  const updateText = document.getElementById('update-text');
+  
+  if (btn) {
+    btn.setAttribute('disabled', 'true');
+    btn.textContent = 'Kontrol Ediliyor...';
+  }
+
+  try {
+    const status = await window.api.checkForUpdate();
+    if (status) {
+      const versionTextEl = document.getElementById('app-version-text');
+      if (versionTextEl && status.localVersion) {
+        versionTextEl.textContent = `Sürüm: v${status.localVersion}`;
+      }
+      
+      if (status.updateAvailable) {
+        updateText.innerHTML = `Yeni Sürüm Mevcut: <strong>v${status.remoteVersion}</strong> (Mevcut: v${status.localVersion})`;
+        updateBanner.classList.remove('hidden');
+        alert(`Yeni sürüm mevcut: v${status.remoteVersion}\n"Son Sürüme Güncelle" butonunu kullanarak güncelleyebilirsiniz.`);
+      } else {
+        updateBanner.classList.add('hidden');
+        alert(`Uygulamanız günceldir.\nMevcut Sürüm: v${status.localVersion}`);
+      }
+    } else {
+      alert('Sürüm bilgisi alınamadı.');
+    }
+  } catch (err) {
+    alert(`Sürüm kontrolü başarısız oldu:\n${err.message}`);
+  } finally {
+    if (btn) {
+      btn.removeAttribute('disabled');
+      btn.textContent = '🔄 Sürüm Kontrol Et';
+    }
+  }
+}
+
 function updateThemeButtonUI(theme) {
   const btn = document.getElementById('btn-toggle-theme');
   if (btn) {
@@ -157,6 +196,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         btnInstallUpdate.textContent = 'Son Sürüme Güncelle';
       }
     });
+  }
+
+  // Manual update check button
+  const btnCheckUpdateManual = document.getElementById('btn-check-update-manual');
+  if (btnCheckUpdateManual) {
+    btnCheckUpdateManual.addEventListener('click', handleManualUpdateCheck);
   }
 
   // Bind change/blur listeners to rate inputs to save changes to DB
