@@ -6,3 +6,7 @@ config.json
 update.zip
 update_temp/
 .env*
+__pycache__/
+*.pyc
+console_errors.txt
+irsaliyeler/
