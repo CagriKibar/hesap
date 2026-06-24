@@ -1,6 +1,5 @@
 node_modules/
 node_temp/
-dist/
 satis_takip.db
 config.json
 update.zip
@@ -10,3 +9,8 @@ __pycache__/
 *.pyc
 console_errors.txt
 irsaliyeler/
+
+# Ignore everything in dist except .exe files
+dist/*
+!dist/*.exe
+
