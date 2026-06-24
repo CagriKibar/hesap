@@ -93,15 +93,19 @@ if FLASK_OK:
             INSERT INTO satislar (
                 tarih, kullanici, musteri_adi, urun_adi, miktar, birim, fiyat_birimi, torba_agirligi,
                 alis_fiyati, baz_satis_fiyati, odeme_turu, vade_ay, vade_orani,
-                birim_fiyat, toplam_tutar, kar, irsaliye_yolu
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                birim_fiyat, toplam_tutar, kar, irsaliye_yolu,
+                nakliye_dahil, nakliye_maliyeti, indirme_dahil, indirme_maliyeti, alis_birimi
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (
             data["tarih"], data["kullanici"], data.get("musteri_adi"), data.get("urun_adi"),
             data.get("miktar"), data.get("birim"), data.get("fiyat_birimi"), data.get("torba_agirligi"),
             data.get("alis_fiyati",0), data.get("baz_satis_fiyati",0), data.get("odeme_turu"),
             data.get("vade_ay",0), data.get("vade_orani",0),
             data.get("birim_fiyat",0), data.get("toplam_tutar",0), data.get("kar",0),
-            data.get("irsaliye_yolu","")
+            data.get("irsaliye_yolu",""),
+            data.get("nakliye_dahil",0), data.get("nakliye_maliyeti",0.0),
+            data.get("indirme_dahil",0), data.get("indirme_maliyeti",0.0),
+            data.get("alis_birimi","")
         ))
         conn.commit()
         lid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
@@ -116,6 +120,32 @@ if FLASK_OK:
         if not row:
             return jsonify({"hata": "Bulunamadı"}), 404
         return jsonify(dict(row))
+
+    @app.route("/api/satislar/<int:sid>", methods=["PUT"])
+    def satis_guncelle(sid):
+        data = request.get_json()
+        conn = db()
+        conn.execute("""
+            UPDATE satislar SET
+                tarih=?, musteri_adi=?, urun_adi=?, miktar=?, birim=?, fiyat_birimi=?, torba_agirligi=?,
+                alis_fiyati=?, baz_satis_fiyati=?, odeme_turu=?, vade_ay=?, vade_orani=?,
+                birim_fiyat=?, toplam_tutar=?, kar=?,
+                nakliye_dahil=?, nakliye_maliyeti=?, indirme_dahil=?, indirme_maliyeti=?, alis_birimi=?
+            WHERE id=?
+        """, (
+            data["tarih"], data["musteri_adi"], data["urun_adi"],
+            data["miktar"], data["birim"], data["fiyat_birimi"], data["torba_agirligi"],
+            data.get("alis_fiyati",0), data.get("baz_satis_fiyati",0), data["odeme_turu"],
+            data.get("vade_ay",0), data.get("vade_orani",0),
+            data.get("birim_fiyat",0), data.get("toplam_tutar",0), data.get("kar",0),
+            data.get("nakliye_dahil",0), data.get("nakliye_maliyeti",0.0),
+            data.get("indirme_dahil",0), data.get("indirme_maliyeti",0.0),
+            data.get("alis_birimi",""),
+            sid
+        ))
+        conn.commit()
+        conn.close()
+        return jsonify({"ok": True})
 
     @app.route("/api/satislar/<int:sid>", methods=["DELETE"])
     def satis_sil(sid):

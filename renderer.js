@@ -240,6 +240,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   // Sales Tab Action Buttons
   document.getElementById('btn-view-sale-detail').addEventListener('click', viewSaleDetail);
+  document.getElementById('btn-edit-sale').addEventListener('click', openEditSaleModal);
+  document.getElementById('btn-save-edit-sale').addEventListener('click', saveEditSaleRecord);
+  setupEditSaleCalculationTraces();
+
   document.getElementById('btn-upload-waybill').addEventListener('click', uploadWaybillFile);
   document.getElementById('btn-view-waybill').addEventListener('click', viewWaybillFile);
   document.getElementById('btn-reprint-pdf').addEventListener('click', reprintReceiptPdf);
@@ -838,6 +842,7 @@ async function saveSaleRecord() {
     fiyat_birimi: document.getElementById('base-price-type').value,
     torba_agirligi: getFloatValue('bag-weight', 50.0, 0.0001),
     alis_fiyati: getFloatValue('purchase-price', 0.0),
+    alis_birimi: document.getElementById('purchase-price-type').value,
     baz_satis_fiyati: getFloatValue('base-price', 0.0),
     odeme_turu: selectedType,
     vade_ay: parseInt(document.getElementById('vade-months').value) || 0,
@@ -845,7 +850,11 @@ async function saveSaleRecord() {
     birim_fiyat: pricing.unit_price,
     toplam_tutar: pricing.total_price,
     kar: pricing.profit,
-    irsaliye_yolu: ''
+    irsaliye_yolu: '',
+    nakliye_dahil: document.getElementById('has-shipping').checked ? 1 : 0,
+    nakliye_maliyeti: getFloatValue('shipping-cost', 0.0),
+    indirme_dahil: document.getElementById('has-unloading').checked ? 1 : 0,
+    indirme_maliyeti: getFloatValue('unloading-cost', 0.0)
   };
 
   try {
@@ -902,6 +911,251 @@ async function refreshSalesTable() {
     });
   } catch (err) {
     tableBody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: var(--danger-color);">Hata: ${err.message}</td></tr>`;
+  }
+}
+
+let editingSaleMetadata = {};
+
+function setupEditSaleCalculationTraces() {
+  const inputs = [
+    'edit-sale-qty', 'edit-sale-purchase-price', 'edit-sale-base-price', 'edit-sale-vade-rate',
+    'edit-sale-bag-weight', 'edit-sale-shipping-cost', 'edit-sale-unloading-cost',
+    'edit-sale-unit-type', 'edit-sale-purchase-price-type', 'edit-sale-base-price-type',
+    'edit-sale-receipt-type', 'edit-sale-vade-months'
+  ];
+  
+  inputs.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      const eventName = el.tagName === 'SELECT' || el.type === 'checkbox' ? 'change' : 'input';
+      el.addEventListener(eventName, runEditSaleCalculation);
+    }
+  });
+
+  // Shipping & Unloading Cost inputs toggling
+  document.getElementById('edit-sale-has-shipping').addEventListener('change', (e) => {
+    const el = document.getElementById('edit-sale-shipping-cost');
+    if (e.target.checked) {
+      el.removeAttribute('disabled');
+    } else {
+      el.setAttribute('disabled', 'true');
+      el.value = '';
+    }
+    runEditSaleCalculation();
+  });
+  
+  document.getElementById('edit-sale-has-unloading').addEventListener('change', (e) => {
+    const el = document.getElementById('edit-sale-unloading-cost');
+    if (e.target.checked) {
+      el.removeAttribute('disabled');
+    } else {
+      el.setAttribute('disabled', 'true');
+      el.value = '';
+    }
+    runEditSaleCalculation();
+  });
+}
+
+function runEditSaleCalculation() {
+  const qty = getFloatValue('edit-sale-qty', 1.0, 0.0001);
+  const basePrice = getFloatValue('edit-sale-base-price', 0.0);
+  const purchasePrice = getFloatValue('edit-sale-purchase-price', 0.0);
+  const bagWeight = getFloatValue('edit-sale-bag-weight', 50.0, 0.0001);
+  
+  const uQtyType = document.getElementById('edit-sale-unit-type').value;
+  const uPurType = document.getElementById('edit-sale-purchase-price-type').value;
+  const uSelType = document.getElementById('edit-sale-base-price-type').value;
+  
+  // Toggle Bag Weight field visibility
+  const hasTorba = [uQtyType, uPurType, uSelType].includes('TORBA');
+  const bagInput = document.getElementById('edit-sale-bag-weight');
+  if (hasTorba) {
+    bagInput.removeAttribute('disabled');
+  } else {
+    bagInput.setAttribute('disabled', 'true');
+  }
+  
+  // Weight mappings
+  const weights = {
+    'KG': 1.0,
+    'TON': 1000.0,
+    'TORBA': bagWeight,
+    'M2': 1.0
+  };
+  
+  // 1. Convert Purchase Price to Quantity Unit
+  let purConversionFactor = 1.0;
+  if (uQtyType !== uPurType && uQtyType !== 'M2' && uPurType !== 'M2') {
+    const wQ = weights[uQtyType] || 1.0;
+    const wPur = weights[uPurType] || 1.0;
+    purConversionFactor = wQ / wPur;
+  }
+  
+  // 2. Convert Selling Price to Quantity Unit
+  let selConversionFactor = 1.0;
+  if (uQtyType !== uSelType && uQtyType !== 'M2' && uSelType !== 'M2') {
+    const wQ = weights[uQtyType] || 1.0;
+    const wSel = weights[uSelType] || 1.0;
+    selConversionFactor = wQ / wSel;
+  }
+  
+  const convertedPurchasePrice = purchasePrice * purConversionFactor;
+  const convertedBasePrice = basePrice * selConversionFactor;
+  
+  // Vade interest Calculations
+  const vadeMonths = parseInt(document.getElementById('edit-sale-vade-months').value) || 0;
+  const vadeRate = getFloatValue('edit-sale-vade-rate', 0.0);
+  const totalVadeSurcharge = vadeMonths * vadeRate;
+  
+  // Shipping / Unloading values
+  const hasShipping = document.getElementById('edit-sale-has-shipping').checked;
+  const shipCost = hasShipping ? getFloatValue('edit-sale-shipping-cost', 0.0) : 0.0;
+  
+  const hasUnloading = document.getElementById('edit-sale-has-unloading').checked;
+  const unloadCost = hasUnloading ? getFloatValue('edit-sale-unloading-cost', 0.0) : 0.0;
+  
+  // Calculate unit extra costs
+  const unitExtraCost = (shipCost + unloadCost) / qty;
+  const unitBasePrice = convertedBasePrice + unitExtraCost;
+  const unitCost = convertedPurchasePrice > 0 ? (convertedPurchasePrice + unitExtraCost) : 0.0;
+  
+  // Get base rate for current payment type
+  const currentPayType = document.getElementById('edit-sale-receipt-type').value;
+  let baseRate = 0.0;
+  if (currentPayType === 'Nakit') baseRate = getFloatValue('rate-cash', 0.0);
+  else if (currentPayType === 'Kredi Kartı') baseRate = getFloatValue('rate-cc', 0.0);
+  else if (currentPayType === 'Çek') baseRate = getFloatValue('rate-check', 0.0);
+  else if (currentPayType === 'Senet') baseRate = getFloatValue('rate-note', 0.0);
+  else if (currentPayType === 'Evrak') baseRate = getFloatValue('rate-doc', 0.0);
+  else if (currentPayType === 'DBS') baseRate = getFloatValue('rate-dbs', 0.0);
+
+  const finalAppliedRate = currentPayType === 'Nakit' ? baseRate : (baseRate + totalVadeSurcharge);
+  const unitFinalPrice = unitBasePrice * (1 + (finalAppliedRate / 100));
+  const totalFinalPrice = unitFinalPrice * qty;
+  const totalProfit = unitCost > 0 ? (totalFinalPrice - (unitCost * qty)) : 0.0;
+  const profitMarginPct = (unitCost > 0) ? (totalProfit / (unitCost * qty) * 100) : 0.0;
+
+  // Update DOM labels
+  document.getElementById('edit-sale-lbl-unit-price').textContent = `${formatMoney(unitFinalPrice)} ₺`;
+  document.getElementById('edit-sale-lbl-total-price').textContent = `${formatMoney(totalFinalPrice)} ₺`;
+  
+  const profitText = purchasePrice > 0 
+    ? `${formatMoney(totalProfit)} ₺ (${profitMarginPct >= 0 ? '+' : ''}${profitMarginPct.toFixed(2)}%)` 
+    : '-';
+  document.getElementById('edit-sale-lbl-profit').textContent = profitText;
+
+  return {
+    unitFinalPrice,
+    totalFinalPrice,
+    totalProfit
+  };
+}
+
+async function openEditSaleModal() {
+  if (!selectedSaleRowId) {
+    alert('Lütfen düzenlemek istediğiniz satışı listeden seçin.');
+    return;
+  }
+  
+  try {
+    const sale = await window.api.getSaleDetails(selectedSaleRowId);
+    
+    editingSaleMetadata = {
+      tarih: sale.tarih,
+      kullanici: sale.kullanici,
+      irsaliye_yolu: sale.irsaliye_yolu
+    };
+    
+    document.getElementById('edit-sale-title').textContent = `Satış Kaydını Düzenle - ID: ${sale.id}`;
+    document.getElementById('edit-sale-id').value = sale.id;
+    document.getElementById('edit-sale-cust-name').value = sale.musteri_adi || '';
+    document.getElementById('edit-sale-prod-name').value = sale.urun_adi || '';
+    document.getElementById('edit-sale-qty').value = sale.miktar || 1;
+    document.getElementById('edit-sale-unit-type').value = sale.birim || 'TORBA';
+    document.getElementById('edit-sale-bag-weight').value = sale.torba_agirligi || 50;
+    
+    document.getElementById('edit-sale-purchase-price').value = sale.alis_fiyati || '';
+    document.getElementById('edit-sale-purchase-price-type').value = sale.alis_birimi || sale.birim || 'TORBA';
+    
+    document.getElementById('edit-sale-base-price').value = sale.baz_satis_fiyati || '';
+    document.getElementById('edit-sale-base-price-type').value = sale.fiyat_birimi || 'TON';
+    
+    document.getElementById('edit-sale-receipt-type').value = sale.odeme_turu || 'Nakit';
+    document.getElementById('edit-sale-vade-months').value = sale.vade_ay || 0;
+    document.getElementById('edit-sale-vade-rate').value = sale.vade_orani || 0;
+    
+    document.getElementById('edit-sale-waybill-path').value = sale.irsaliye_yolu ? 'Yüklendi' : 'Yüklenmedi';
+    
+    const hasShipping = sale.nakliye_dahil === 1;
+    document.getElementById('edit-sale-has-shipping').checked = hasShipping;
+    const shipInput = document.getElementById('edit-sale-shipping-cost');
+    shipInput.value = hasShipping ? (sale.nakliye_maliyeti || '') : '';
+    if (hasShipping) shipInput.removeAttribute('disabled');
+    else shipInput.setAttribute('disabled', 'true');
+    
+    const hasUnloading = sale.indirme_dahil === 1;
+    document.getElementById('edit-sale-has-unloading').checked = hasUnloading;
+    const unloadInput = document.getElementById('edit-sale-unloading-cost');
+    unloadInput.value = hasUnloading ? (sale.indirme_maliyeti || '') : '';
+    if (hasUnloading) unloadInput.removeAttribute('disabled');
+    else unloadInput.setAttribute('disabled', 'true');
+    
+    // Set visibility of manager only sections in edit modal based on current user role (always visible since managers columns are visible to all users)
+    const managerFields = document.querySelectorAll('#modal-edit-sale .manager-only');
+    managerFields.forEach(el => el.classList.remove('hidden'));
+
+    openModal('modal-edit-sale');
+    runEditSaleCalculation();
+  } catch (err) {
+    alert(`Satış bilgileri yüklenemedi:\n${err.message}`);
+  }
+}
+
+async function saveEditSaleRecord() {
+  const sid = parseInt(document.getElementById('edit-sale-id').value);
+  if (!sid) return;
+
+  const pName = document.getElementById('edit-sale-prod-name').value.trim().toUpperCase();
+  if (!pName) {
+    alert('Lütfen Ürün Adı / Kodu giriniz.');
+    return;
+  }
+
+  const calc = runEditSaleCalculation();
+  if (!calc) return;
+
+  const saleData = {
+    tarih: editingSaleMetadata.tarih,
+    kullanici: editingSaleMetadata.kullanici,
+    irsaliye_yolu: editingSaleMetadata.irsaliye_yolu,
+    musteri_adi: document.getElementById('edit-sale-cust-name').value.trim().toUpperCase() || '..............',
+    urun_adi: pName,
+    miktar: getFloatValue('edit-sale-qty', 1.0, 0.0001),
+    birim: document.getElementById('edit-sale-unit-type').value,
+    fiyat_birimi: document.getElementById('edit-sale-base-price-type').value,
+    torba_agirligi: getFloatValue('edit-sale-bag-weight', 50.0, 0.0001),
+    alis_fiyati: getFloatValue('edit-sale-purchase-price', 0.0),
+    alis_birimi: document.getElementById('edit-sale-purchase-price-type').value,
+    baz_satis_fiyati: getFloatValue('edit-sale-base-price', 0.0),
+    odeme_turu: document.getElementById('edit-sale-receipt-type').value,
+    vade_ay: parseInt(document.getElementById('edit-sale-vade-months').value) || 0,
+    vade_orani: getFloatValue('edit-sale-vade-rate', 0.0),
+    birim_fiyat: calc.unitFinalPrice,
+    toplam_tutar: calc.totalFinalPrice,
+    kar: calc.totalProfit,
+    nakliye_dahil: document.getElementById('edit-sale-has-shipping').checked ? 1 : 0,
+    nakliye_maliyeti: getFloatValue('edit-sale-shipping-cost', 0.0),
+    indirme_dahil: document.getElementById('edit-sale-has-unloading').checked ? 1 : 0,
+    indirme_maliyeti: getFloatValue('edit-sale-unloading-cost', 0.0)
+  };
+
+  try {
+    await window.api.editSale(sid, saleData);
+    alert('Satış kaydı başarıyla güncellendi.');
+    closeAllModals();
+    refreshSalesTable();
+  } catch (err) {
+    alert(`Güncelleme sırasında hata oluştu:\n${err.message}`);
   }
 }
 

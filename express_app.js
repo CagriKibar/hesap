@@ -56,15 +56,19 @@ app.post('/api/satislar', (req, res) => {
       INSERT INTO satislar (
         tarih, kullanici, musteri_adi, urun_adi, miktar, birim, fiyat_birimi, torba_agirligi,
         alis_fiyati, baz_satis_fiyati, odeme_turu, vade_ay, vade_orani,
-        birim_fiyat, toplam_tutar, kar, irsaliye_yolu
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        birim_fiyat, toplam_tutar, kar, irsaliye_yolu,
+        nakliye_dahil, nakliye_maliyeti, indirme_dahil, indirme_maliyeti, alis_birimi
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     `, [
       data.tarih, data.kullanici, data.musteri_adi, data.urun_adi,
       data.miktar, data.birim, data.fiyat_birimi, data.torba_agirligi,
       data.alis_fiyati || 0, data.baz_satis_fiyati || 0, data.odeme_turu,
       data.vade_ay || 0, data.vade_orani || 0,
       data.birim_fiyat || 0, data.toplam_tutar || 0, data.kar || 0,
-      data.irsaliye_yolu || ''
+      data.irsaliye_yolu || '',
+      data.nakliye_dahil || 0, data.nakliye_maliyeti || 0.0,
+      data.indirme_dahil || 0, data.indirme_maliyeti || 0.0,
+      data.alis_birimi || ''
     ]);
     res.status(201).json({ id: lastId });
   } catch (err) {
@@ -81,6 +85,35 @@ app.get('/api/satislar/:id', (req, res) => {
       return res.status(404).json({ hata: "Bulunamadı" });
     }
     res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ hata: err.message });
+  }
+});
+
+// Edit sale
+app.put('/api/satislar/:id', (req, res) => {
+  const sid = parseInt(req.params.id);
+  const data = req.body;
+  try {
+    db.execRun(`
+      UPDATE satislar SET
+        tarih=?, musteri_adi=?, urun_adi=?, miktar=?, birim=?, fiyat_birimi=?, torba_agirligi=?,
+        alis_fiyati=?, baz_satis_fiyati=?, odeme_turu=?, vade_ay=?, vade_orani=?,
+        birim_fiyat=?, toplam_tutar=?, kar=?,
+        nakliye_dahil=?, nakliye_maliyeti=?, indirme_dahil=?, indirme_maliyeti=?, alis_birimi=?
+      WHERE id=?
+    `, [
+      data.tarih, data.musteri_adi, data.urun_adi,
+      data.miktar, data.birim, data.fiyat_birimi, data.torba_agirligi,
+      data.alis_fiyati || 0, data.baz_satis_fiyati || 0, data.odeme_turu,
+      data.vade_ay || 0, data.vade_orani || 0,
+      data.birim_fiyat || 0, data.toplam_tutar || 0, data.kar || 0,
+      data.nakliye_dahil || 0, data.nakliye_maliyeti || 0.0,
+      data.indirme_dahil || 0, data.indirme_maliyeti || 0.0,
+      data.alis_birimi || '',
+      sid
+    ]);
+    res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ hata: err.message });
   }

@@ -364,6 +364,7 @@
           <div class="card-footer flex-row justify-between">
             <div class="actions-left flex-row">
               <button id="btn-view-sale-detail" class="btn btn-outline">Satışı Görüntüle</button>
+              <button id="btn-edit-sale" class="btn btn-outline">✏ Satışı Düzenle</button>
               <button id="btn-upload-waybill" class="btn btn-outline">İrsaliye Yükle</button>
               <button id="btn-view-waybill" class="btn btn-outline">İrsaliyeyi Görüntüle</button>
               <button id="btn-reprint-pdf" class="btn btn-outline">PDF Fişi Tekrar Çıkar</button>
@@ -717,6 +718,166 @@
     <div class="modal-footer">
       <button class="btn btn-outline btn-close-modal">İptal</button>
       <button id="btn-save-reset-pass" class="btn btn-primary">Şifreyi Sıfırla</button>
+    </div>
+  </div>
+
+  <!-- 6. SATIŞ GÜNCELLE MODAL -->
+  <div id="modal-edit-sale" class="modal-card hidden" style="width: 550px;">
+    <div class="modal-header">
+      <h3 id="edit-sale-title">Satış Kaydını Düzenle - ID: -</h3>
+      <button class="btn-close-modal">&times;</button>
+    </div>
+    <div class="modal-body" style="max-height: 480px; overflow-y: auto;">
+      <input type="hidden" id="edit-sale-id">
+      
+      <div class="form-row">
+        <div class="form-group col-6">
+          <label for="edit-sale-cust-name">Müşteri Adı / Unvanı</label>
+          <input type="text" id="edit-sale-cust-name">
+        </div>
+        <div class="form-group col-6">
+          <label for="edit-sale-prod-name">Ürün Adı / Kodu</label>
+          <input type="text" id="edit-sale-prod-name">
+        </div>
+      </div>
+      
+      <div class="form-row">
+        <div class="form-group col-4">
+          <label for="edit-sale-unit-type">Miktar Birimi</label>
+          <select id="edit-sale-unit-type">
+            <option value="TORBA">TORBA</option>
+            <option value="KG">KG</option>
+            <option value="TON">TON</option>
+            <option value="M2">M2</option>
+          </select>
+        </div>
+        <div class="form-group col-4">
+          <label for="edit-sale-qty">Miktar</label>
+          <input type="text" id="edit-sale-qty">
+        </div>
+        <div class="form-group col-4">
+          <label for="edit-sale-bag-weight">Torba Ağırlığı (kg)</label>
+          <input type="text" id="edit-sale-bag-weight">
+        </div>
+      </div>
+      
+      <div class="form-row">
+        <div class="form-group col-6">
+          <label for="edit-sale-purchase-price">Alış Fiyatı</label>
+          <input type="text" id="edit-sale-purchase-price">
+        </div>
+        <div class="form-group col-6">
+          <label for="edit-sale-purchase-price-type">Alış Fiyat Birimi</label>
+          <select id="edit-sale-purchase-price-type">
+            <option value="TORBA">TORBA</option>
+            <option value="KG">KG</option>
+            <option value="TON">TON</option>
+            <option value="M2">M2</option>
+          </select>
+        </div>
+      </div>
+      
+      <div class="form-row">
+        <div class="form-group col-6">
+          <label for="edit-sale-base-price">Baz Satış Fiyatı</label>
+          <input type="text" id="edit-sale-base-price">
+        </div>
+        <div class="form-group col-6">
+          <label for="edit-sale-base-price-type">Satış Fiyat Birimi</label>
+          <select id="edit-sale-base-price-type">
+            <option value="TON">TON</option>
+            <option value="TORBA">TORBA</option>
+            <option value="KG">KG</option>
+            <option value="M2">M2</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group col-6">
+          <label for="edit-sale-receipt-type">Ödeme Türü</label>
+          <select id="edit-sale-receipt-type">
+            <option value="Nakit">Nakit</option>
+            <option value="Kredi Kartı">Kredi Kartı</option>
+            <option value="Çek">Çek</option>
+            <option value="Senet">Senet</option>
+            <option value="Evrak">Evrak</option>
+            <option value="DBS">DBS</option>
+          </select>
+        </div>
+        <div class="form-group col-6">
+          <label for="edit-sale-vade-months">Vade Süresi (Ay)</label>
+          <select id="edit-sale-vade-months">
+            <option value="0">0 (Nakit)</option>
+            <option value="1">1 Ay</option>
+            <option value="2">2 Ay</option>
+            <option value="3">3 Ay</option>
+            <option value="4">4 Ay</option>
+            <option value="5">5 Ay</option>
+            <option value="6">6 Ay</option>
+            <option value="7">7 Ay</option>
+            <option value="8">8 Ay</option>
+            <option value="9">9 Ay</option>
+            <option value="10">10 Ay</option>
+            <option value="11">11 Ay</option>
+            <option value="12">12 Ay</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group col-6">
+          <label for="edit-sale-vade-rate">Aylık Vade Farkı (%)</label>
+          <input type="text" id="edit-sale-vade-rate">
+        </div>
+        <div class="form-group col-6">
+          <label for="edit-sale-waybill-path">İrsaliye Dosya Yolu</label>
+          <input type="text" id="edit-sale-waybill-path" placeholder="Yüklenmedi" disabled>
+        </div>
+      </div>
+
+      <!-- Ek Hizmetler -->
+      <div style="margin-top: 10px; margin-bottom: 10px; padding: 10px; background-color: rgba(255, 255, 255, 0.02); border-radius: 6px; border: 1px solid var(--border-color);">
+        <h4 style="font-size: 0.85rem; margin-bottom: 8px; color: var(--text-primary);">Ek Hizmetler (Tutar Üstüne)</h4>
+        <div class="form-row">
+          <div class="col-6 flex-row align-center gap-10">
+            <label class="checkbox-container" style="margin-bottom: 0;">
+              <input type="checkbox" id="edit-sale-has-shipping">
+              <span class="checkmark"></span>
+              Nakliye Dahil
+            </label>
+            <input type="text" id="edit-sale-shipping-cost" placeholder="Maliyet ₺" class="input-inline" style="width: 80px !important;" disabled>
+          </div>
+          <div class="col-6 flex-row align-center gap-10">
+            <label class="checkbox-container" style="margin-bottom: 0;">
+              <input type="checkbox" id="edit-sale-has-unloading">
+              <span class="checkmark"></span>
+              İndirme Dahil
+            </label>
+            <input type="text" id="edit-sale-unloading-cost" placeholder="Maliyet ₺" class="input-inline" style="width: 80px !important;" disabled>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top: 15px; padding: 10px; border-radius: 6px; background-color: rgba(108, 92, 231, 0.05); border: 1px dashed var(--primary-color);">
+        <div class="flex-row justify-between" style="font-size: 0.85rem; margin-bottom: 5px;">
+          <span>Yeni Birim Fiyatı:</span>
+          <strong id="edit-sale-lbl-unit-price">0,00 ₺</strong>
+        </div>
+        <div class="flex-row justify-between" style="font-size: 0.85rem; margin-bottom: 5px;">
+          <span>Yeni Toplam Tutar:</span>
+          <strong id="edit-sale-lbl-total-price">0,00 ₺</strong>
+        </div>
+        <div class="flex-row justify-between manager-only" style="font-size: 0.85rem;">
+          <span>Yeni Tahmini Kâr:</span>
+          <strong id="edit-sale-lbl-profit">0,00 ₺</strong>
+        </div>
+      </div>
+      
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline btn-close-modal">İptal</button>
+      <button id="btn-save-edit-sale" class="btn btn-primary">Kaydet</button>
     </div>
   </div>
 

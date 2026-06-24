@@ -94,9 +94,30 @@ function createSchema() {
       birim_fiyat REAL,
       toplam_tutar REAL,
       kar REAL,
-      irsaliye_yolu TEXT
+      irsaliye_yolu TEXT,
+      nakliye_dahil INTEGER DEFAULT 0,
+      nakliye_maliyeti REAL DEFAULT 0.0,
+      indirme_dahil INTEGER DEFAULT 0,
+      indirme_maliyeti REAL DEFAULT 0.0,
+      alis_birimi TEXT
     )
   `);
+
+  // Migration to check if new columns exist in satislar
+  try {
+    const columns = execQuery("PRAGMA table_info(satislar)");
+    const hasNakliyeDahil = columns.some(c => c.name === 'nakliye_dahil');
+    if (!hasNakliyeDahil) {
+      dbInstance.run("ALTER TABLE satislar ADD COLUMN nakliye_dahil INTEGER DEFAULT 0");
+      dbInstance.run("ALTER TABLE satislar ADD COLUMN nakliye_maliyeti REAL DEFAULT 0.0");
+      dbInstance.run("ALTER TABLE satislar ADD COLUMN indirme_dahil INTEGER DEFAULT 0");
+      dbInstance.run("ALTER TABLE satislar ADD COLUMN indirme_maliyeti REAL DEFAULT 0.0");
+      dbInstance.run("ALTER TABLE satislar ADD COLUMN alis_birimi TEXT");
+      saveToDisk();
+    }
+  } catch (e) {
+    console.error("Migration error (satislar):", e);
+  }
 
   // 3. Settings (Ayarlar) Table
   dbInstance.run(`

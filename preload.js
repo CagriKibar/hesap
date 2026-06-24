@@ -58,5 +58,6 @@ contextBridge.exposeInMainWorld('api', {
   // Update & Version Control
   checkForUpdate: () => ipcRenderer.invoke('check-for-update'),
   installUpdate: () => ipcRenderer.invoke('install-update'),
-  relaunchApp: () => ipcRenderer.invoke('relaunch-app')
+  relaunchApp: () => ipcRenderer.invoke('relaunch-app'),
+  editSale: (sid, saleData) => ipcRenderer.invoke('edit-sale', { sid, saleData })
 });

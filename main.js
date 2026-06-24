@@ -293,17 +293,49 @@ ipcMain.handle('add-sale', async (event, saleData) => {
       INSERT INTO satislar (
         tarih, kullanici, musteri_adi, urun_adi, miktar, birim, fiyat_birimi, torba_agirligi,
         alis_fiyati, baz_satis_fiyati, odeme_turu, vade_ay, vade_orani,
-        birim_fiyat, toplam_tutar, kar, irsaliye_yolu
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        birim_fiyat, toplam_tutar, kar, irsaliye_yolu,
+        nakliye_dahil, nakliye_maliyeti, indirme_dahil, indirme_maliyeti, alis_birimi
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     `, [
       saleData.tarih, saleData.kullanici, saleData.musteri_adi, saleData.urun_adi,
       saleData.miktar, saleData.birim, saleData.fiyat_birimi, saleData.torba_agirligi,
       saleData.alis_fiyati, saleData.baz_satis_fiyati, saleData.odeme_turu,
       saleData.vade_ay, saleData.vade_orani,
       saleData.birim_fiyat, saleData.toplam_tutar, saleData.kar,
-      saleData.irsaliye_yolu || ''
+      saleData.irsaliye_yolu || '',
+      saleData.nakliye_dahil || 0, saleData.nakliye_maliyeti || 0.0,
+      saleData.indirme_dahil || 0, saleData.indirme_maliyeti || 0.0,
+      saleData.alis_birimi || ''
     ]);
     return { id: lastId };
+  }
+});
+
+// Edit Sale
+ipcMain.handle('edit-sale', async (event, { sid, saleData }) => {
+  const cfg = loadConfigSync();
+  if (cfg.mod === 'istemci') {
+    return await apiCall('put', `/api/satislar/${sid}`, saleData);
+  } else {
+    db.execRun(`
+      UPDATE satislar SET
+        tarih=?, musteri_adi=?, urun_adi=?, miktar=?, birim=?, fiyat_birimi=?, torba_agirligi=?,
+        alis_fiyati=?, baz_satis_fiyati=?, odeme_turu=?, vade_ay=?, vade_orani=?,
+        birim_fiyat=?, toplam_tutar=?, kar=?,
+        nakliye_dahil=?, nakliye_maliyeti=?, indirme_dahil=?, indirme_maliyeti=?, alis_birimi=?
+      WHERE id=?
+    `, [
+      saleData.tarih, saleData.musteri_adi, saleData.urun_adi,
+      saleData.miktar, saleData.birim, saleData.fiyat_birimi, saleData.torba_agirligi,
+      saleData.alis_fiyati, saleData.baz_satis_fiyati, saleData.odeme_turu,
+      saleData.vade_ay, saleData.vade_orani,
+      saleData.birim_fiyat, saleData.toplam_tutar, saleData.kar,
+      saleData.nakliye_dahil || 0, saleData.nakliye_maliyeti || 0.0,
+      saleData.indirme_dahil || 0, saleData.indirme_maliyeti || 0.0,
+      saleData.alis_birimi || '',
+      sid
+    ]);
+    return { ok: true };
   }
 });
 
