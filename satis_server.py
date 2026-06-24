@@ -75,8 +75,62 @@ if FLASK_OK:
             return jsonify({"hata": "Hesap pasif"}), 403
         return jsonify({"kullanici_adi": row["kullanici_adi"], "rol": row["rol"], "aktif": row["aktif"]})
 
+    def recalculate_and_heal_sales_profits():
+        try:
+            conn = db()
+            conn.row_factory = sqlite3.Row
+            sales = conn.execute("SELECT * FROM satislar").fetchall()
+            for r in sales:
+                qty = r["miktar"] if r["miktar"] is not None else 0.0
+                if qty <= 0:
+                    continue
+                base_price = r["baz_satis_fiyati"] if r["baz_satis_fiyati"] is not None else 0.0
+                purchase_price = r["alis_fiyati"] if r["alis_fiyati"] is not None else 0.0
+                bag_weight = r["torba_agirligi"] if r["torba_agirligi"] is not None else 50.0
+                u_qty_type = r["birim"] if r["birim"] is not None else 'TORBA'
+                u_pur_type = r["alis_birimi"] if r["alis_birimi"] is not None else u_qty_type
+                u_sel_type = r["fiyat_birimi"] if r["fiyat_birimi"] is not None else u_qty_type
+
+                weights = {
+                    'KG': 1.0,
+                    'TON': 1000.0,
+                    'TORBA': bag_weight,
+                    'M2': 1.0
+                }
+
+                pur_conversion_factor = 1.0
+                if u_qty_type != u_pur_type and u_qty_type != 'M2' and u_pur_type != 'M2':
+                    w_q = weights.get(u_qty_type, 1.0)
+                    w_pur = weights.get(u_pur_type, 1.0)
+                    pur_conversion_factor = w_q / w_pur
+
+                sel_conversion_factor = 1.0
+                if u_qty_type != u_sel_type and u_qty_type != 'M2' and u_sel_type != 'M2':
+                    w_q = weights.get(u_qty_type, 1.0)
+                    w_sel = weights.get(u_sel_type, 1.0)
+                    sel_conversion_factor = w_q / w_sel
+
+                converted_purchase_price = purchase_price * pur_conversion_factor
+                ship_cost = r["nakliye_maliyeti"] if (r["nakliye_dahil"] == 1 and r["nakliye_maliyeti"] is not None) else 0.0
+                unload_cost = r["indirme_maliyeti"] if (r["indirme_dahil"] == 1 and r["indirme_maliyeti"] is not None) else 0.0
+
+                unit_extra_cost = (ship_cost + unload_cost) / qty
+                unit_cost = (converted_purchase_price + unit_extra_cost) if converted_purchase_price > 0 else 0.0
+
+                expected_profit = (r["toplam_tutar"] - (unit_cost * qty)) if unit_cost > 0 else 0.0
+                stored_profit = r["kar"] if r["kar"] is not None else 0.0
+                diff = abs(expected_profit - stored_profit)
+
+                if diff > 0.02:
+                    conn.execute("UPDATE satislar SET kar=? WHERE id=?", (expected_profit, r["id"]))
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            print(f"Auto-heal failed: {e}")
+
     @app.route("/api/satislar", methods=["GET"])
     def satislar_listele():
+        recalculate_and_heal_sales_profits()
         conn = db()
         rows = conn.execute(
             "SELECT id, tarih, kullanici, musteri_adi, urun_adi, miktar, birim, toplam_tutar, kar, irsaliye_yolu "

@@ -90,6 +90,65 @@ function getSaleBaseUnitPrice(sale) {
   return basePrice * selConversionFactor;
 }
 
+function recalculateAndHealSalesProfits() {
+  try {
+    const list = db.execQuery("SELECT * FROM satislar");
+    let updatedCount = 0;
+    list.forEach(sale => {
+      const qty = sale.miktar || 0.0;
+      if (qty <= 0) return;
+      const basePrice = sale.baz_satis_fiyati || 0.0;
+      const purchasePrice = sale.alis_fiyati || 0.0;
+      const bagWeight = sale.torba_agirligi || 50.0;
+      const uQtyType = sale.birim || 'TORBA';
+      const uPurType = sale.alis_birimi || uQtyType;
+      const uSelType = sale.fiyat_birimi || uQtyType;
+
+      const weights = {
+        'KG': 1.0,
+        'TON': 1000.0,
+        'TORBA': bagWeight,
+        'M2': 1.0
+      };
+
+      let purConversionFactor = 1.0;
+      if (uQtyType !== uPurType && uQtyType !== 'M2' && uPurType !== 'M2') {
+        const wQ = weights[uQtyType] || 1.0;
+        const wPur = weights[uPurType] || 1.0;
+        purConversionFactor = wQ / wPur;
+      }
+
+      let selConversionFactor = 1.0;
+      if (uQtyType !== uSelType && uQtyType !== 'M2' && uSelType !== 'M2') {
+        const wQ = weights[uQtyType] || 1.0;
+        const wSel = weights[uSelType] || 1.0;
+        selConversionFactor = wQ / wSel;
+      }
+
+      const convertedPurchasePrice = purchasePrice * purConversionFactor;
+      const shipCost = sale.nakliye_dahil === 1 ? (sale.nakliye_maliyeti || 0.0) : 0.0;
+      const unloadCost = sale.indirme_dahil === 1 ? (sale.indirme_maliyeti || 0.0) : 0.0;
+
+      const unitExtraCost = (shipCost + unloadCost) / qty;
+      const unitCost = convertedPurchasePrice > 0 ? (convertedPurchasePrice + unitExtraCost) : 0.0;
+
+      const expectedProfit = unitCost > 0 ? (sale.toplam_tutar - (unitCost * qty)) : 0.0;
+      const storedProfit = sale.kar || 0.0;
+      const diff = Math.abs(expectedProfit - storedProfit);
+
+      if (diff > 0.02) {
+        db.execRun("UPDATE satislar SET kar=? WHERE id=?", [expectedProfit, sale.id]);
+        updatedCount++;
+      }
+    });
+    if (updatedCount > 0) {
+      console.log(`Auto-healed ${updatedCount} sales records with profit discrepancies.`);
+    }
+  } catch (err) {
+    console.error('Failed to run sales profit auto-heal:', err);
+  }
+}
+
 // Get the Arial TTF font or system Helvetica fallback
 function getFontPaths() {
   let regular = 'Helvetica';
@@ -204,6 +263,7 @@ app.whenReady().then(async () => {
   if (cfg.mod !== 'istemci') {
     try {
       await db.initDatabase(cfg.db_yolu);
+      recalculateAndHealSalesProfits();
     } catch (e) {
       console.error('Failed to initialize local SQLite database:', e);
     }
@@ -233,6 +293,7 @@ ipcMain.handle('save-config', async (event, cfg) => {
   if (cfg.mod !== 'istemci') {
     try {
       await db.initDatabase(cfg.db_yolu);
+      recalculateAndHealSalesProfits();
     } catch (e) {
       console.error('Failed to initialize SQLite on config save:', e);
       throw e;
@@ -301,6 +362,7 @@ ipcMain.handle('get-sales', async () => {
   if (cfg.mod === 'istemci') {
     return await apiCall('get', '/api/satislar');
   } else {
+    recalculateAndHealSalesProfits();
     return db.execQuery("SELECT id, tarih, kullanici, musteri_adi, urun_adi, miktar, birim, toplam_tutar, kar, irsaliye_yolu FROM satislar ORDER BY id DESC");
   }
 });
