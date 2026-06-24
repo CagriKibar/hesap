@@ -317,7 +317,7 @@ ipcMain.handle('add-sale', async (event, saleData) => {
         alis_fiyati, baz_satis_fiyati, odeme_turu, vade_ay, vade_orani,
         birim_fiyat, toplam_tutar, kar, irsaliye_yolu,
         nakliye_dahil, nakliye_maliyeti, indirme_dahil, indirme_maliyeti, alis_birimi
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     `, [
       saleData.tarih, saleData.kullanici, saleData.musteri_adi, saleData.urun_adi,
       saleData.miktar, saleData.birim, saleData.fiyat_birimi, saleData.torba_agirligi,

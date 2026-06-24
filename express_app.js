@@ -58,7 +58,7 @@ app.post('/api/satislar', (req, res) => {
         alis_fiyati, baz_satis_fiyati, odeme_turu, vade_ay, vade_orani,
         birim_fiyat, toplam_tutar, kar, irsaliye_yolu,
         nakliye_dahil, nakliye_maliyeti, indirme_dahil, indirme_maliyeti, alis_birimi
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     `, [
       data.tarih, data.kullanici, data.musteri_adi, data.urun_adi,
       data.miktar, data.birim, data.fiyat_birimi, data.torba_agirligi,

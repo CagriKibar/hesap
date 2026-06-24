@@ -95,7 +95,7 @@ if FLASK_OK:
                 alis_fiyati, baz_satis_fiyati, odeme_turu, vade_ay, vade_orani,
                 birim_fiyat, toplam_tutar, kar, irsaliye_yolu,
                 nakliye_dahil, nakliye_maliyeti, indirme_dahil, indirme_maliyeti, alis_birimi
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (
             data["tarih"], data["kullanici"], data.get("musteri_adi"), data.get("urun_adi"),
             data.get("miktar"), data.get("birim"), data.get("fiyat_birimi"), data.get("torba_agirligi"),
