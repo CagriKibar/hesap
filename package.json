@@ -1,6 +1,6 @@
 {
   "name": "hausmart-satis-takip",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Hausmart Fiyatlandırma & Satış Takip Sistemi",
   "main": "main.js",
   "scripts": {

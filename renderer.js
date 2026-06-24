@@ -251,6 +251,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Dashboard Action Triggers
   document.getElementById('btn-logout').addEventListener('click', handleLogout);
   document.getElementById('btn-refresh-sales').addEventListener('click', refreshSalesTable);
+  document.getElementById('btn-export-all-excel').addEventListener('click', handleExportAllSalesExcel);
+  document.getElementById('btn-export-all-pdf').addEventListener('click', handleExportAllSalesPdf);
   document.getElementById('btn-refresh-history-products').addEventListener('click', refreshHistoryProducts);
   document.getElementById('history-product-dropdown').addEventListener('change', refreshPriceHistory);
   document.getElementById('btn-refresh-users').addEventListener('click', refreshUsersTable);
@@ -831,6 +833,24 @@ async function exportPriceAnalysisPdf() {
     if (savedPath) alert(`Teslim fişi PDF olarak kaydedildi.`);
   } catch (err) {
     alert(`PDF oluşturulamadı:\n${err.message}`);
+  }
+}
+
+async function handleExportAllSalesExcel() {
+  try {
+    const savedPath = await window.api.exportAllSalesExcel(currentRole);
+    if (savedPath) alert(`Tüm satışlar Excel olarak kaydedildi:\n${savedPath}`);
+  } catch (err) {
+    alert(`Excel dosyası oluşturulamadı:\n${err.message}`);
+  }
+}
+
+async function handleExportAllSalesPdf() {
+  try {
+    const savedPath = await window.api.exportAllSalesPdf(currentRole);
+    if (savedPath) alert(`Tüm satışlar PDF olarak kaydedildi:\n${savedPath}`);
+  } catch (err) {
+    alert(`PDF dosyası oluşturulamadı:\n${err.message}`);
   }
 }
 

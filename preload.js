@@ -28,6 +28,8 @@ contextBridge.exposeInMainWorld('api', {
   regenerateReceiptPdf: (saleId) => ipcRenderer.invoke('regenerate-receipt-pdf', saleId),
   exportDetailPdf: (saleId) => ipcRenderer.invoke('export-detail-pdf', saleId),
   exportDetailExcel: (saleId) => ipcRenderer.invoke('export-detail-excel', saleId),
+  exportAllSalesExcel: (role) => ipcRenderer.invoke('export-all-sales-excel', role),
+  exportAllSalesPdf: (role) => ipcRenderer.invoke('export-all-sales-pdf', role),
   
   // Products
   getProducts: () => ipcRenderer.invoke('get-products'),

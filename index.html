@@ -336,7 +336,11 @@
         <div class="card fill-height flex-column">
           <div class="card-header flex-row justify-between align-center">
             <h3>Son Satış Hareketleri</h3>
-            <button id="btn-refresh-sales" class="btn btn-outline btn-sm">🔄 Yenile</button>
+            <div class="flex-row gap-10">
+              <button id="btn-export-all-excel" class="btn btn-outline btn-sm" style="border-color: #2ecc71; color: #2ecc71;">🟢 Tümünü Excel'e Aktar</button>
+              <button id="btn-export-all-pdf" class="btn btn-outline btn-sm" style="border-color: #e74c3c; color: #e74c3c;">🔴 Tümünü PDF'e Aktar</button>
+              <button id="btn-refresh-sales" class="btn btn-outline btn-sm">🔄 Yenile</button>
+            </div>
           </div>
           <div class="card-body flex-grow grid-container">
             <div class="table-wrapper">

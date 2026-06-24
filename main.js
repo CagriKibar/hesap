@@ -870,7 +870,331 @@ function extractAndApplyUpdate(zipPath, tempExtractPath, workspacePath) {
   });
 }
 
-// --- PDF & Excel Reports Generators ---
+// A. Export All Sales to Excel
+ipcMain.handle('export-all-sales-excel', async (event, role) => {
+  const saveResult = await dialog.showSaveDialog(mainWindow, {
+    title: 'Tüm Satışları Excel Olarak Kaydet',
+    defaultPath: `Tum_Satislar_${new Date().toISOString().slice(0, 10)}.xlsx`,
+    filters: [{ name: 'Excel Dosyaları', extensions: ['xlsx'] }]
+  });
+
+  if (saveResult.canceled || !saveResult.filePath) return false;
+
+  try {
+    const cfg = loadConfigSync();
+    let list = [];
+    if (cfg.mod === 'istemci') {
+      list = await apiCall('get', '/api/satislar');
+    } else {
+      list = db.execQuery("SELECT * FROM satislar ORDER BY id DESC");
+    }
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Satışlar');
+
+    const isManager = (role === 'Yönetici' || role === 'Süper Admin');
+    const headers = [
+      'ID', 'Tarih', 'Kullanıcı', 'Müşteri', 'Ürün Adı', 'Miktar', 'Birim',
+      'Baz Satış Fiyatı', 'Fiyat Birimi', 'Ödeme Türü', 'Vade (Ay)', 'Vade Oranı (%)',
+      'Birim Satış Fiyatı (Net)', 'Toplam Tutar', 'İrsaliye Durumu', 'Nakliye Dahil', 'Nakliye Maliyeti',
+      'İndirme Dahil', 'İndirme Maliyeti'
+    ];
+    if (isManager) {
+      headers.push('Alış Fiyatı', 'Alış Birimi', 'Toplam Kâr');
+    }
+
+    sheet.mergeCells(1, 1, 1, headers.length);
+    const titleCell = sheet.getCell('A1');
+    titleCell.value = `HAUSMART - TÜM SATIŞ RAPORU`;
+    titleCell.font = { bold: true, size: 14, color: { argb: '000000' } };
+    titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'F8CD24' } };
+    titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    sheet.getRow(1).height = 35;
+
+    sheet.mergeCells(2, 1, 2, headers.length);
+    const dateCell = sheet.getCell('A2');
+    dateCell.value = `Rapor Tarihi: ${new Date().toLocaleString('tr-TR')}`;
+    dateCell.font = { italic: true, size: 10 };
+    dateCell.alignment = { horizontal: 'center' };
+    sheet.getRow(2).height = 20;
+
+    const headerRow = sheet.getRow(4);
+    headerRow.height = 25;
+    headers.forEach((h, idx) => {
+      const cell = headerRow.getCell(idx + 1);
+      cell.value = h;
+      cell.font = { bold: true, size: 10 };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'EAEAEA' } };
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      cell.border = {
+        top: { style: 'thin' },
+        bottom: { style: 'medium' },
+        left: { style: 'thin' },
+        right: { style: 'thin' }
+      };
+    });
+
+    list.forEach((sale, index) => {
+      const r = sheet.getRow(index + 5);
+      r.height = 20;
+      const baseUnitPrice = getSaleBaseUnitPrice(sale);
+      
+      const values = [
+        sale.id,
+        sale.tarih,
+        sale.kullanici,
+        sale.musteri_adi || '-',
+        sale.urun_adi,
+        Number(sale.miktar || 0),
+        sale.birim,
+        Number(sale.baz_satis_fiyati || 0),
+        sale.fiyat_birimi,
+        sale.odeme_turu,
+        Number(sale.vade_ay || 0),
+        Number(sale.vade_orani || 0),
+        Number(baseUnitPrice || 0),
+        Number(sale.toplam_tutar || 0),
+        sale.irsaliye_yolu ? 'Yüklendi' : 'Yüklenmedi',
+        sale.nakliye_dahil === 1 ? 'Evet' : 'Hayır',
+        Number(sale.nakliye_maliyeti || 0),
+        sale.indirme_dahil === 1 ? 'Evet' : 'Hayır',
+        Number(sale.indirme_maliyeti || 0)
+      ];
+
+      if (isManager) {
+        values.push(
+          Number(sale.alis_fiyati || 0),
+          sale.alis_birimi || sale.birim,
+          Number(sale.kar || 0)
+        );
+      }
+
+      values.forEach((val, idx) => {
+        const cell = r.getCell(idx + 1);
+        cell.value = val;
+        cell.alignment = { vertical: 'middle' };
+        
+        if (typeof val === 'number') {
+          if (idx === 0 || idx === 10) {
+            cell.numFmt = '0';
+          } else if (idx === 11) {
+            cell.numFmt = '0.00"%"';
+          } else {
+            cell.numFmt = '#,##0.00';
+          }
+        }
+        
+        cell.font = { size: 9 };
+        cell.border = {
+          top: { style: 'thin' },
+          bottom: { style: 'thin' },
+          left: { style: 'thin' },
+          right: { style: 'thin' }
+        };
+
+        if (index % 2 === 1) {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'F9F9F9' } };
+        }
+      });
+    });
+
+    sheet.columns.forEach(column => {
+      let maxLen = 0;
+      column.eachCell({ includeEmpty: true }, cell => {
+        const value = cell.value ? String(cell.value) : '';
+        if (value.length > maxLen) maxLen = value.length;
+      });
+      column.width = Math.max(12, maxLen + 3);
+    });
+
+    await workbook.xlsx.writeFile(saveResult.filePath);
+    return saveResult.filePath;
+  } catch (err) {
+    console.error('Failed to export all sales to Excel:', err);
+    throw err;
+  }
+});
+
+// B. Export All Sales to PDF (Landscape A4 Table)
+ipcMain.handle('export-all-sales-pdf', async (event, role) => {
+  const saveResult = await dialog.showSaveDialog(mainWindow, {
+    title: 'Tüm Satış Raporu PDF Kaydet',
+    defaultPath: `Tum_Satislari_Raporu_${new Date().toISOString().slice(0, 10)}.pdf`,
+    filters: [{ name: 'PDF Dosyaları', extensions: ['pdf'] }]
+  });
+
+  if (saveResult.canceled || !saveResult.filePath) return false;
+
+  try {
+    const cfg = loadConfigSync();
+    let list = [];
+    if (cfg.mod === 'istemci') {
+      list = await apiCall('get', '/api/satislar');
+    } else {
+      list = db.execQuery("SELECT * FROM satislar ORDER BY id DESC");
+    }
+
+    await generateAllSalesPdf(saveResult.filePath, list, role);
+    return saveResult.filePath;
+  } catch (err) {
+    console.error('Failed to export all sales to PDF:', err);
+    throw err;
+  }
+});
+
+function generateAllSalesPdf(filePath, list, role) {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ size: 'A4', layout: 'landscape', margin: 40 });
+    const stream = fs.createWriteStream(filePath);
+    doc.pipe(stream);
+
+    const fonts = getFontPaths();
+    doc.font(fonts.regular);
+
+    const isManager = (role === 'Yönetici' || role === 'Süper Admin');
+
+    // Header Background
+    doc.rect(0, 0, 841.89, 70).fill('#F8CD24');
+
+    // Header Content
+    doc.fillColor('black');
+    doc.font(fonts.bold).fontSize(14).text("YILDIZ ÖZYAPI GEREÇLERİ - TÜM SATIŞ HAREKETLERİ RAPORU", 40, 20);
+    doc.font(fonts.regular).fontSize(9);
+    doc.text(`Rapor Oluşturma Tarihi: ${new Date().toLocaleString('tr-TR')}`, 40, 42);
+    doc.text(`Toplam Kayıt Sayısı: ${list.length}`, 40, 54);
+
+    let columns = [];
+    if (isManager) {
+      columns = [
+        { label: 'ID', width: 30, align: 'left', key: 'id' },
+        { label: 'Tarih', width: 110, align: 'left', key: 'tarih' },
+        { label: 'Kullanıcı', width: 60, align: 'left', key: 'kullanici' },
+        { label: 'Müşteri', width: 130, align: 'left', key: 'musteri_adi' },
+        { label: 'Ürün', width: 90, align: 'left', key: 'urun_adi' },
+        { label: 'Miktar', width: 70, align: 'left', key: 'miktar_str' },
+        { label: 'Ödeme', width: 60, align: 'left', key: 'odeme_turu' },
+        { label: 'Tutar (₺)', width: 90, align: 'right', key: 'toplam_tutar_str' },
+        { label: 'Kâr (₺)', width: 90, align: 'right', key: 'kar_str' }
+      ];
+    } else {
+      columns = [
+        { label: 'ID', width: 30, align: 'left', key: 'id' },
+        { label: 'Tarih', width: 120, align: 'left', key: 'tarih' },
+        { label: 'Kullanıcı', width: 70, align: 'left', key: 'kullanici' },
+        { label: 'Müşteri', width: 160, align: 'left', key: 'musteri_adi' },
+        { label: 'Ürün', width: 110, align: 'left', key: 'urun_adi' },
+        { label: 'Miktar', width: 80, align: 'left', key: 'miktar_str' },
+        { label: 'Ödeme', width: 70, align: 'left', key: 'odeme_turu' },
+        { label: 'Tutar (₺)', width: 100, align: 'right', key: 'toplam_tutar_str' }
+      ];
+    }
+
+    let y = 90;
+    doc.rect(40, y, 761.89, 20).fill('#EAEAEA');
+    doc.fillColor('black').font(fonts.bold).fontSize(9);
+    
+    let currentX = 40;
+    columns.forEach(col => {
+      doc.text(col.label, currentX + (col.align === 'right' ? 0 : 5), y + 6, {
+        width: col.width - 5,
+        align: col.align
+      });
+      currentX += col.width;
+    });
+
+    y += 20;
+    doc.font(fonts.regular).fontSize(8);
+
+    let totalSum = 0;
+    let totalProfitSum = 0;
+
+    list.forEach((sale, index) => {
+      if (y > 520) {
+        doc.addPage({ size: 'A4', layout: 'landscape', margin: 40 });
+        doc.font(fonts.regular);
+        
+        doc.rect(0, 0, 841.89, 50).fill('#F8CD24');
+        doc.fillColor('black').font(fonts.bold).fontSize(10).text("TÜM SATIŞ HAREKETLERİ RAPORU (Devam)", 40, 20);
+        
+        y = 70;
+        doc.rect(40, y, 761.89, 20).fill('#EAEAEA');
+        doc.fillColor('black').font(fonts.bold).fontSize(9);
+        currentX = 40;
+        columns.forEach(col => {
+          doc.text(col.label, currentX + (col.align === 'right' ? 0 : 5), y + 6, {
+            width: col.width - 5,
+            align: col.align
+          });
+          currentX += col.width;
+        });
+        y += 20;
+        doc.font(fonts.regular).fontSize(8);
+      }
+
+      if (index % 2 === 1) {
+        doc.rect(40, y, 761.89, 18).fill('#F9F9F9');
+      }
+
+      doc.fillColor('black');
+      currentX = 40;
+      
+      const miktarStr = `${sale.miktar} ${sale.birim}`;
+      const toplamTutarStr = formatMoney(sale.toplam_tutar);
+      const karStr = formatMoney(sale.kar);
+
+      totalSum += Number(sale.toplam_tutar || 0);
+      totalProfitSum += Number(sale.kar || 0);
+
+      columns.forEach(col => {
+        let val = '';
+        if (col.key === 'id') val = String(sale.id);
+        else if (col.key === 'tarih') val = sale.tarih;
+        else if (col.key === 'kullanici') val = sale.kullanici;
+        else if (col.key === 'musteri_adi') val = sale.musteri_adi || '-';
+        else if (col.key === 'urun_adi') val = sale.urun_adi;
+        else if (col.key === 'miktar_str') val = miktarStr;
+        else if (col.key === 'odeme_turu') val = sale.odeme_turu;
+        else if (col.key === 'toplam_tutar_str') val = toplamTutarStr;
+        else if (col.key === 'kar_str') val = karStr;
+
+        doc.text(val, currentX + (col.align === 'right' ? 0 : 5), y + 5, {
+          width: col.width - 5,
+          align: col.align,
+          lineBreak: false
+        });
+        currentX += col.width;
+      });
+
+      y += 18;
+    });
+
+    if (y > 500) {
+      doc.addPage({ size: 'A4', layout: 'landscape', margin: 40 });
+      doc.font(fonts.regular);
+      y = 50;
+    }
+
+    y += 10;
+    doc.rect(40, y, 761.89, 25).fill('#EAEAEA');
+    doc.fillColor('black').font(fonts.bold).fontSize(10);
+    
+    doc.text("GENEL TOPLAM:", 50, y + 8);
+    
+    let totalX = 40;
+    columns.forEach(col => {
+      if (col.key === 'toplam_tutar_str') {
+        doc.text(`${formatMoney(totalSum)} ₺`, totalX, y + 8, { width: col.width, align: 'right' });
+      } else if (col.key === 'kar_str' && isManager) {
+        doc.text(`${formatMoney(totalProfitSum)} ₺`, totalX, y + 8, { width: col.width, align: 'right' });
+      }
+      totalX += col.width;
+    });
+
+    doc.end();
+    stream.on('finish', () => resolve(true));
+    stream.on('error', (e) => reject(e));
+  });
+}
 
 // A. Export Cumulative Price Analysis (Tab 1 Grid) to Excel
 ipcMain.handle('export-excel', async (event, data) => {
