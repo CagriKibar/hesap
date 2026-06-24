@@ -24,7 +24,7 @@ function loadConfigSync() {
     mod: 'yerel', // yerel | paylasim | istemci
     db_yolu: path.join(userDataPath, 'satis_takip.db'),
     sunucu_url: 'http://127.0.0.1:8765',
-    github_repo: 'hausmart-dev/satis-takip'
+    github_repo: 'CagriKibar/hesap'
   };
   if (fs.existsSync(CONFIG_FILE)) {
     try {
@@ -645,7 +645,7 @@ ipcMain.handle('open-external', async (event, url) => {
 // Update & Version Control
 ipcMain.handle('check-for-update', async () => {
   const cfg = loadConfigSync();
-  const repo = cfg.github_repo || 'hausmart-dev/satis-takip';
+  const repo = cfg.github_repo || 'CagriKibar/hesap';
   const url = `https://raw.githubusercontent.com/${repo}/main/package.json`;
   
   return new Promise((resolve) => {
@@ -680,7 +680,7 @@ ipcMain.handle('check-for-update', async () => {
 
 ipcMain.handle('install-update', async () => {
   const cfg = loadConfigSync();
-  const repo = cfg.github_repo || 'hausmart-dev/satis-takip';
+  const repo = cfg.github_repo || 'CagriKibar/hesap';
   const zipUrl = `https://github.com/${repo}/archive/refs/heads/main.zip`;
   const workspacePath = __dirname;
   const zipPath = path.join(workspacePath, 'update.zip');
