@@ -916,14 +916,14 @@ async function saveSaleRecord() {
 async function refreshSalesTable() {
   selectedSaleRowId = null;
   const tableBody = document.querySelector('#sales-history-table tbody');
-  tableBody.innerHTML = '<tr><td colspan="10" style="text-align: center;">Yükleniyor...</td></tr>';
+  tableBody.innerHTML = '<tr><td colspan="11" style="text-align: center;">Yükleniyor...</td></tr>';
   
   try {
     const list = await window.api.getSales();
     tableBody.innerHTML = '';
     
     if (list.length === 0) {
-      tableBody.innerHTML = '<tr><td colspan="10" style="text-align: center;">Kayıt bulunamadı.</td></tr>';
+      tableBody.innerHTML = '<tr><td colspan="11" style="text-align: center;">Kayıt bulunamadı.</td></tr>';
       return;
     }
     
@@ -943,6 +943,14 @@ async function refreshSalesTable() {
         <td>${formatMoney(sale.toplam_tutar)} ₺</td>
         <td class="manager-col ${currentRole ? '' : 'hidden'}">${formatMoney(sale.kar)} ₺</td>
         <td>${isUploaded}</td>
+        <td>
+          <div class="row-actions">
+            <button class="btn-action-icon btn-detail" title="Detay Gör" onclick="event.stopPropagation(); handleRowViewDetail(${sale.id})">🔍</button>
+            <button class="btn-action-icon btn-edit" title="Satışı Düzenle" onclick="event.stopPropagation(); handleRowEdit(${sale.id})">✏️</button>
+            <button class="btn-action-icon btn-waybill" title="İrsaliye Ekle/Gör" onclick="event.stopPropagation(); handleRowWaybill(${sale.id}, '${sale.irsaliye_yolu ? '1' : '0'}')">📁</button>
+            <button class="btn-action-icon btn-delete ${currentRole === 'Personel' ? 'hidden' : ''}" title="Satışı Sil" onclick="event.stopPropagation(); handleRowDelete(${sale.id})">🗑️</button>
+          </div>
+        </td>
       `;
       
       tr.addEventListener('click', () => {
@@ -954,7 +962,7 @@ async function refreshSalesTable() {
       tableBody.appendChild(tr);
     });
   } catch (err) {
-    tableBody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: var(--danger-color);">Hata: ${err.message}</td></tr>`;
+    tableBody.innerHTML = `<tr><td colspan="11" style="text-align: center; color: var(--danger-color);">Hata: ${err.message}</td></tr>`;
   }
 }
 
@@ -1753,3 +1761,28 @@ function closeAllModals() {
   document.getElementById('modal-backdrop').classList.add('hidden');
   document.querySelectorAll('.modal-card').forEach(m => m.classList.add('hidden'));
 }
+
+// Global Row Level Handlers
+window.handleRowViewDetail = async function(saleId) {
+  selectedSaleRowId = saleId;
+  await viewSaleDetail();
+};
+
+window.handleRowEdit = async function(saleId) {
+  selectedSaleRowId = saleId;
+  await openEditSaleModal();
+};
+
+window.handleRowWaybill = async function(saleId, hasWaybill) {
+  selectedSaleRowId = saleId;
+  if (hasWaybill === '1') {
+    await viewWaybillFile();
+  } else {
+    await uploadWaybillFile();
+  }
+};
+
+window.handleRowDelete = async function(saleId) {
+  selectedSaleRowId = saleId;
+  await deleteSaleRecord();
+};

@@ -958,3 +958,34 @@ tr.passive-user {
   color: var(--secondary-hover);
   text-decoration: underline;
 }
+
+/* ==================== ROW ACTION BUTTONS ==================== */
+.row-actions {
+  display: flex;
+  gap: 5px;
+  justify-content: center;
+}
+
+.btn-action-icon {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 3px 6px;
+  font-size: 0.8rem;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-action-icon:hover {
+  background-color: var(--border-color);
+  transform: scale(1.1);
+}
+
+.btn-action-icon.btn-delete:hover {
+  background-color: rgba(231, 76, 60, 0.2);
+  border-color: #e74c3c;
+}
+
