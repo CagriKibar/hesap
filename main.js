@@ -703,56 +703,119 @@ ipcMain.handle('check-for-update', async () => {
 ipcMain.handle('install-update', async () => {
   const cfg = loadConfigSync();
   const repo = cfg.github_repo || 'CagriKibar/hesap';
-  const zipUrl = `https://github.com/${repo}/archive/refs/heads/main.zip`;
-  const workspacePath = __dirname;
-  const zipPath = path.join(workspacePath, 'update.zip');
-  const tempExtractPath = path.join(workspacePath, 'update_temp');
   
-  return new Promise((resolve, reject) => {
-    const file = fs.createWriteStream(zipPath);
-    https.get(zipUrl, { headers: { 'User-Agent': 'Electron-Updater' } }, (res) => {
-      if (res.statusCode === 302 || res.statusCode === 301) {
-        const redirectUrl = res.headers.location;
-        https.get(redirectUrl, (redirectRes) => {
-          redirectRes.pipe(file);
-          file.on('finish', () => {
-            file.close(async () => {
-              try {
-                await extractAndApplyUpdate(zipPath, tempExtractPath, workspacePath);
-                resolve({ success: true });
-              } catch (err) {
-                reject(err);
-              }
+  // Fetch remote version first to find correct setup file name
+  const versionUrl = `https://raw.githubusercontent.com/${repo}/main/package.json`;
+  let remoteVersion = '';
+  try {
+    const pkgData = await new Promise((resolve, reject) => {
+      https.get(versionUrl, { headers: { 'User-Agent': 'Electron-Updater' } }, (res) => {
+        if (res.statusCode !== 200) reject(new Error(`HTTP ${res.statusCode}`));
+        let body = '';
+        res.on('data', chunk => body += chunk);
+        res.on('end', () => resolve(JSON.parse(body)));
+      }).on('error', reject);
+    });
+    remoteVersion = pkgData.version;
+  } catch (err) {
+    console.error('Failed to fetch remote package version for updater:', err);
+    throw new Error('Güncel sürüm bilgisi alınamadı.');
+  }
+
+  const isPackaged = app.isPackaged;
+  const tempDir = app.getPath('temp');
+
+  if (isPackaged) {
+    // Packaged mode: Download and run the compiled setup installer executable
+    const exeName = `Hausmart Satis Setup ${remoteVersion}.exe`;
+    const exeUrl = `https://github.com/${repo}/raw/main/dist/${encodeURIComponent(exeName)}`;
+    const destExePath = path.join(tempDir, 'Hausmart_Satis_Setup.exe');
+
+    return new Promise((resolve, reject) => {
+      const file = fs.createWriteStream(destExePath);
+      
+      const downloadFile = (url) => {
+        https.get(url, { headers: { 'User-Agent': 'Electron-Updater' } }, (res) => {
+          if (res.statusCode === 302 || res.statusCode === 301) {
+            downloadFile(res.headers.location);
+          } else if (res.statusCode === 200) {
+            res.pipe(file);
+            file.on('finish', () => {
+              file.close(() => {
+                const { spawn } = require('child_process');
+                try {
+                  const child = spawn(destExePath, [], {
+                    detached: true,
+                    stdio: 'ignore'
+                  });
+                  child.unref();
+                  
+                  // Quit immediately so installer can overwrite locked files
+                  setTimeout(() => {
+                    app.quit();
+                  }, 1000);
+                  
+                  resolve({ success: true });
+                } catch (spawnErr) {
+                  reject(spawnErr);
+                }
+              });
             });
-          });
+          } else {
+            file.close();
+            if (fs.existsSync(destExePath)) fs.unlinkSync(destExePath);
+            reject(new Error(`HTTP ${res.statusCode} when downloading installer`));
+          }
+        }).on('error', (err) => {
+          file.close();
+          if (fs.existsSync(destExePath)) fs.unlinkSync(destExePath);
+          reject(err);
+        });
+      };
+
+      downloadFile(exeUrl);
+    });
+  } else {
+    // Development mode: Download source ZIP and apply to workspace path
+    const zipUrl = `https://github.com/${repo}/archive/refs/heads/main.zip`;
+    const workspacePath = __dirname;
+    const zipPath = path.join(tempDir, 'update.zip');
+    const tempExtractPath = path.join(tempDir, 'update_temp');
+
+    return new Promise((resolve, reject) => {
+      const file = fs.createWriteStream(zipPath);
+
+      const downloadFile = (url) => {
+        https.get(url, { headers: { 'User-Agent': 'Electron-Updater' } }, (res) => {
+          if (res.statusCode === 302 || res.statusCode === 301) {
+            downloadFile(res.headers.location);
+          } else if (res.statusCode === 200) {
+            res.pipe(file);
+            file.on('finish', () => {
+              file.close(async () => {
+                try {
+                  await extractAndApplyUpdate(zipPath, tempExtractPath, workspacePath);
+                  resolve({ success: true });
+                } catch (err) {
+                  reject(err);
+                }
+              });
+            });
+          } else {
+            file.close();
+            if (fs.existsSync(zipPath)) fs.unlinkSync(zipPath);
+            reject(new Error(`HTTP ${res.statusCode} when downloading update`));
+          }
         }).on('error', (err) => {
           file.close();
           if (fs.existsSync(zipPath)) fs.unlinkSync(zipPath);
           reject(err);
         });
-      } else if (res.statusCode === 200) {
-        res.pipe(file);
-        file.on('finish', () => {
-          file.close(async () => {
-            try {
-              await extractAndApplyUpdate(zipPath, tempExtractPath, workspacePath);
-              resolve({ success: true });
-            } catch (err) {
-              reject(err);
-            }
-          });
-        });
-      } else {
-        file.close();
-        if (fs.existsSync(zipPath)) fs.unlinkSync(zipPath);
-        reject(new Error(`HTTP ${res.statusCode} when downloading update`));
-      }
-    }).on('error', (err) => {
-      file.close();
-      if (fs.existsSync(zipPath)) fs.unlinkSync(zipPath);
-      reject(err);
+      };
+
+      downloadFile(zipUrl);
     });
-  });
+  }
 });
 
 ipcMain.handle('relaunch-app', () => {
