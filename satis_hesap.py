@@ -318,6 +318,17 @@ class HausmartApp:
         # Giriş ekranını göster
         self.show_login_frame()
         
+    def center_window(self, width, height):
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+        x = (screen_width/2) - (width/2)
+        y = (screen_height/2) - (height/2)
+        self.root.geometry(f'{width}x{height}+{int(x)}+{int(y)}')
+
+    def show_login_frame(self):
+        for widget in self.root.winfo_children():
+            widget.destroy()
+            
         self.root.geometry("400x560")
         self.center_window(400, 560)
         self.root.resizable(False, False)

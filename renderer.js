@@ -10,6 +10,28 @@ function formatMoney(value) {
   return Number(value).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function getSaleBaseUnitPrice(sale) {
+  const basePrice = sale.baz_satis_fiyati || 0.0;
+  const bagWeight = sale.torba_agirligi || 50.0;
+  const uQtyType = sale.birim || 'TORBA';
+  const uSelType = sale.fiyat_birimi || uQtyType;
+
+  const weights = {
+    'KG': 1.0,
+    'TON': 1000.0,
+    'TORBA': bagWeight,
+    'M2': 1.0
+  };
+
+  let selConversionFactor = 1.0;
+  if (uQtyType !== uSelType && uQtyType !== 'M2' && uSelType !== 'M2') {
+    const wQ = weights[uQtyType] || 1.0;
+    const wSel = weights[uSelType] || 1.0;
+    selConversionFactor = wQ / wSel;
+  }
+  return basePrice * selConversionFactor;
+}
+
 // Override global dialogs to use native non-blocking Electron APIs
 window.alert = function(message) {
   window.api.showAlert(message, 'Hausmart');
@@ -847,7 +869,7 @@ async function saveSaleRecord() {
     odeme_turu: selectedType,
     vade_ay: parseInt(document.getElementById('vade-months').value) || 0,
     vade_orani: getFloatValue('vade-rate', 0.0),
-    birim_fiyat: pricing.unit_price,
+    birim_fiyat: 0.0, // Will be set below
     toplam_tutar: pricing.total_price,
     kar: pricing.profit,
     irsaliye_yolu: '',
@@ -856,6 +878,8 @@ async function saveSaleRecord() {
     indirme_dahil: document.getElementById('has-unloading').checked ? 1 : 0,
     indirme_maliyeti: getFloatValue('unloading-cost', 0.0)
   };
+
+  saleData.birim_fiyat = getSaleBaseUnitPrice(saleData);
 
   try {
     await window.api.addSale(saleData);
@@ -1036,6 +1060,7 @@ function runEditSaleCalculation() {
   const profitMarginPct = (unitCost > 0) ? (totalProfit / (unitCost * qty) * 100) : 0.0;
 
   // Update DOM labels
+  document.getElementById('edit-sale-lbl-base-unit-price').textContent = `${formatMoney(convertedBasePrice)} ₺`;
   document.getElementById('edit-sale-lbl-unit-price').textContent = `${formatMoney(unitFinalPrice)} ₺`;
   document.getElementById('edit-sale-lbl-total-price').textContent = `${formatMoney(totalFinalPrice)} ₺`;
   
@@ -1045,6 +1070,7 @@ function runEditSaleCalculation() {
   document.getElementById('edit-sale-lbl-profit').textContent = profitText;
 
   return {
+    convertedBasePrice,
     unitFinalPrice,
     totalFinalPrice,
     totalProfit
@@ -1140,7 +1166,7 @@ async function saveEditSaleRecord() {
     odeme_turu: document.getElementById('edit-sale-receipt-type').value,
     vade_ay: parseInt(document.getElementById('edit-sale-vade-months').value) || 0,
     vade_orani: getFloatValue('edit-sale-vade-rate', 0.0),
-    birim_fiyat: calc.unitFinalPrice,
+    birim_fiyat: calc.convertedBasePrice,
     toplam_tutar: calc.totalFinalPrice,
     kar: calc.totalProfit,
     nakliye_dahil: document.getElementById('edit-sale-has-shipping').checked ? 1 : 0,
@@ -1186,7 +1212,7 @@ async function viewSaleDetail() {
     
     document.getElementById('det-odeme').textContent = sale.odeme_turu;
     document.getElementById('det-vade').textContent = sale.vade_ay > 0 ? `${sale.vade_ay} Ay (Aylık %${sale.vade_orani})` : 'Nakit / Vadesiz';
-    document.getElementById('det-birim-fiyat').textContent = `${formatMoney(sale.birim_fiyat)} ₺`;
+    document.getElementById('det-birim-fiyat').textContent = `${formatMoney(getSaleBaseUnitPrice(sale))} ₺`;
     document.getElementById('det-toplam').textContent = `${formatMoney(sale.toplam_tutar)} ₺`;
     
     const adminFields = document.querySelectorAll('#modal-sale-details .manager-only');
@@ -1350,7 +1376,7 @@ async function refreshPriceHistory() {
         <td>${item.birim}</td>
         <td>${item.odeme_turu}</td>
         <td>${item.vade_ay > 0 ? item.vade_ay : '-'}</td>
-        <td>${formatMoney(item.birim_fiyat)} ₺</td>
+        <td>${formatMoney(getSaleBaseUnitPrice(item))} ₺</td>
         <td>${formatMoney(item.toplam_tutar)} ₺</td>
       `;
       tableBody.appendChild(tr);

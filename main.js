@@ -68,6 +68,28 @@ function formatMoney(value) {
   return Number(value).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function getSaleBaseUnitPrice(sale) {
+  const basePrice = sale.baz_satis_fiyati || 0.0;
+  const bagWeight = sale.torba_agirligi || 50.0;
+  const uQtyType = sale.birim || 'TORBA';
+  const uSelType = sale.fiyat_birimi || uQtyType;
+
+  const weights = {
+    'KG': 1.0,
+    'TON': 1000.0,
+    'TORBA': bagWeight,
+    'M2': 1.0
+  };
+
+  let selConversionFactor = 1.0;
+  if (uQtyType !== uSelType && uQtyType !== 'M2' && uSelType !== 'M2') {
+    const wQ = weights[uQtyType] || 1.0;
+    const wSel = weights[uSelType] || 1.0;
+    selConversionFactor = wQ / wSel;
+  }
+  return basePrice * selConversionFactor;
+}
+
 // Get the Arial TTF font or system Helvetica fallback
 function getFontPaths() {
   let regular = 'Helvetica';
@@ -995,6 +1017,14 @@ ipcMain.handle('export-detail-excel', async (event, saleId) => {
     titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
     sheet.getRow(1).height = 30;
 
+    const baseUnitPrice = getSaleBaseUnitPrice(sale);
+    const qty = sale.miktar || 1.0;
+    const netProductTotal = baseUnitPrice * qty;
+    const nakliyeBedeli = (sale.nakliye_dahil === 1) ? (sale.nakliye_maliyeti || 0) : 0;
+    const indirmeBedeli = (sale.indirme_dahil === 1) ? (sale.indirme_maliyeti || 0) : 0;
+    const totalWithoutVade = netProductTotal + nakliyeBedeli + indirmeBedeli;
+    const vadeFarki = Math.max(0, sale.toplam_tutar - totalWithoutVade);
+
     const fields = [
       ['Satış Tarihi', sale.tarih],
       ['Satışı Yapan', sale.kullanici],
@@ -1007,7 +1037,11 @@ ipcMain.handle('export-detail-excel', async (event, saleId) => {
       ['Vade (Ay)', sale.vade_ay],
       ['Aylık Vade Oranı (%)', `${sale.vade_orani}%`],
       ['Baz Satış Fiyatı (₺)', sale.baz_satis_fiyati],
-      ['Birim Satış Fiyatı (₺)', sale.birim_fiyat],
+      ['Birim Satış Fiyatı (Net) (₺)', baseUnitPrice],
+      ['Net Ürün Bedeli (₺)', netProductTotal],
+      ['Nakliye Bedeli (₺)', nakliyeBedeli],
+      ['İndirme Bedeli (₺)', indirmeBedeli],
+      ['Vade / Ödeme Farkı (₺)', vadeFarki],
       ['Toplam Tutar (₺)', sale.toplam_tutar]
     ];
 
@@ -1104,6 +1138,7 @@ function generatePdfSlip(filePath, sale) {
     doc.text("BİRİM FİYAT", 490, 196, { width: 60, align: 'right' });
 
     // Rows
+    const baseUnitPrice = getSaleBaseUnitPrice(sale);
     doc.font(fonts.regular).fontSize(9);
     let y = 210;
     for (let i = 0; i < 15; i++) {
@@ -1117,20 +1152,41 @@ function generatePdfSlip(filePath, sale) {
         doc.text(String(sale.miktar), 320, y + 6);
         doc.text("0,00", 380, y + 6);
         doc.text(sale.birim || "", 440, y + 6);
-        doc.text(formatMoney(sale.birim_fiyat), 490, y + 6, { width: 60, align: 'right' });
+        doc.text(formatMoney(baseUnitPrice), 490, y + 6, { width: 60, align: 'right' });
       }
       y += 20;
     }
 
-    // Totals
-    y += 15;
-    doc.font(fonts.regular).fontSize(10);
-    doc.text("Ara Toplam (Net) :", 350, y, { width: 120, align: 'right' });
-    doc.text(formatMoney(sale.toplam_tutar), 480, y, { width: 75, align: 'right' });
+    // Totals Breakdown
+    const qty = sale.miktar || 1.0;
+    const netProductTotal = baseUnitPrice * qty;
+    const nakliyeBedeli = (sale.nakliye_dahil === 1) ? (sale.nakliye_maliyeti || 0) : 0;
+    const indirmeBedeli = (sale.indirme_dahil === 1) ? (sale.indirme_maliyeti || 0) : 0;
+    const totalWithoutVade = netProductTotal + nakliyeBedeli + indirmeBedeli;
+    const vadeFarki = Math.max(0, sale.toplam_tutar - totalWithoutVade);
 
     y += 15;
-    doc.text("KDV Toplam :", 350, y, { width: 120, align: 'right' });
-    doc.text("0,00", 480, y, { width: 75, align: 'right' });
+    doc.font(fonts.regular).fontSize(10);
+    doc.text("Net Ürün Bedeli :", 350, y, { width: 120, align: 'right' });
+    doc.text(formatMoney(netProductTotal), 480, y, { width: 75, align: 'right' });
+
+    if (nakliyeBedeli > 0) {
+      y += 15;
+      doc.text("Nakliye Bedeli :", 350, y, { width: 120, align: 'right' });
+      doc.text(formatMoney(nakliyeBedeli), 480, y, { width: 75, align: 'right' });
+    }
+
+    if (indirmeBedeli > 0) {
+      y += 15;
+      doc.text("İndirme Bedeli :", 350, y, { width: 120, align: 'right' });
+      doc.text(formatMoney(indirmeBedeli), 480, y, { width: 75, align: 'right' });
+    }
+
+    if (vadeFarki > 0.01) {
+      y += 15;
+      doc.text("Vade / Ödeme Farkı :", 350, y, { width: 120, align: 'right' });
+      doc.text(formatMoney(vadeFarki), 480, y, { width: 75, align: 'right' });
+    }
 
     y += 15;
     doc.rect(340, y - 4, 215, 18).fill('#D8D8D8');
@@ -1204,13 +1260,32 @@ function generatePdfDetailReport(filePath, sale) {
     if (sale.birim === 'TORBA' || sale.fiyat_birimi === 'TORBA') {
       fields.push(['Torba Ağırlığı', `${sale.torba_agirligi} kg`]);
     }
+    const baseUnitPrice = getSaleBaseUnitPrice(sale);
+    const qty = sale.miktar || 1.0;
+    const netProductTotal = baseUnitPrice * qty;
+    const nakliyeBedeli = (sale.nakliye_dahil === 1) ? (sale.nakliye_maliyeti || 0) : 0;
+    const indirmeBedeli = (sale.indirme_dahil === 1) ? (sale.indirme_maliyeti || 0) : 0;
+    const totalWithoutVade = netProductTotal + nakliyeBedeli + indirmeBedeli;
+    const vadeFarki = Math.max(0, sale.toplam_tutar - totalWithoutVade);
+
     fields.push(
       ['Ödeme Türü', sale.odeme_turu],
       ['Vade', sale.vade_ay > 0 ? `${sale.vade_ay} Ay (Aylık %${sale.vade_orani})` : 'Nakit / Vadesiz'],
-      ['Baz Satış Fiyatı', `${formatMoney(sale.baz_satis_fiyati)} ₺`],
-      ['Birim Satış Fiyatı', `${formatMoney(sale.birim_fiyat)} ₺`],
-      ['Toplam Tutar', `${formatMoney(sale.toplam_tutar)} ₺`]
+      ['Baz Satış Fiyatı', `${formatMoney(sale.baz_satis_fiyati)} ₺ (${sale.fiyat_birimi})`],
+      ['Birim Satış Fiyatı (Net)', `${formatMoney(baseUnitPrice)} ₺ / ${sale.birim}`],
+      ['Net Ürün Bedeli', `${formatMoney(netProductTotal)} ₺`]
     );
+
+    if (nakliyeBedeli > 0) {
+      fields.push(['Nakliye Bedeli', `${formatMoney(nakliyeBedeli)} ₺`]);
+    }
+    if (indirmeBedeli > 0) {
+      fields.push(['İndirme Bedeli', `${formatMoney(indirmeBedeli)} ₺`]);
+    }
+    if (vadeFarki > 0.01) {
+      fields.push(['Vade / Ödeme Farkı', `${formatMoney(vadeFarki)} ₺`]);
+    }
+    fields.push(['Toplam Tutar', `${formatMoney(sale.toplam_tutar)} ₺`]);
 
     if (sale.alis_fiyati !== undefined && sale.alis_fiyati > 0) {
       fields.push(['Alış Fiyatı', `${formatMoney(sale.alis_fiyati)} ₺`]);
