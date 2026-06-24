@@ -932,6 +932,12 @@ async function refreshSalesTable() {
       const tr = document.createElement('tr');
       tr.setAttribute('data-id', sale.id);
       
+      const totalCost = sale.toplam_tutar - sale.kar;
+      const profitMarginPct = totalCost > 0 ? (sale.kar / totalCost * 100) : 0.0;
+      const profitText = (sale.kar !== undefined && sale.kar !== null && totalCost > 0)
+        ? `${formatMoney(sale.kar)} ₺ (${profitMarginPct >= 0 ? '+' : ''}${profitMarginPct.toFixed(2)}%)`
+        : (sale.kar !== undefined && sale.kar !== null ? `${formatMoney(sale.kar)} ₺` : '-');
+
       tr.innerHTML = `
         <td>${sale.id}</td>
         <td>${sale.tarih}</td>
@@ -941,7 +947,7 @@ async function refreshSalesTable() {
         <td>${sale.miktar}</td>
         <td>${sale.birim}</td>
         <td>${formatMoney(sale.toplam_tutar)} ₺</td>
-        <td class="manager-col ${currentRole ? '' : 'hidden'}">${formatMoney(sale.kar)} ₺</td>
+        <td class="manager-col ${currentRole ? '' : 'hidden'}">${profitText}</td>
         <td>${isUploaded}</td>
         <td>
           <div class="row-actions">
@@ -1247,7 +1253,12 @@ async function viewSaleDetail() {
     if (currentRole) {
       adminFields.forEach(el => el.classList.remove('hidden'));
       document.getElementById('det-alis').textContent = `${formatMoney(sale.alis_fiyati)} ₺`;
-      document.getElementById('det-kar').textContent = `${formatMoney(sale.kar)} ₺`;
+      const totalCost = sale.toplam_tutar - sale.kar;
+      const profitMarginPct = totalCost > 0 ? (sale.kar / totalCost * 100) : 0.0;
+      const detKarText = totalCost > 0 
+        ? `${formatMoney(sale.kar)} ₺ (${profitMarginPct >= 0 ? '+' : ''}${profitMarginPct.toFixed(2)}%)`
+        : `${formatMoney(sale.kar)} ₺`;
+      document.getElementById('det-kar').textContent = detKarText;
     } else {
       adminFields.forEach(el => el.classList.add('hidden'));
     }

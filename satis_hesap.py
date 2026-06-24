@@ -1395,9 +1395,14 @@ class HausmartApp:
             row_vals.append(irs_status)
             
             row_vals[5] = f"{row_vals[5]:g}"
-            row_vals[7] = f"{row_vals[7]:,.2f}"
             if self.current_role == "Yönetici":
-                row_vals[8] = f"{row_vals[8]:,.2f}"
+                total_tutar = row_vals[7]
+                kar = row_vals[8]
+                total_cost = total_tutar - kar
+                profit_pct = (kar / total_cost * 100) if total_cost > 0 else 0.0
+                pct_sign = "+" if profit_pct >= 0 else ""
+                row_vals[8] = f"{kar:,.2f} ({pct_sign}{profit_pct:.2f}%)" if total_cost > 0 else f"{kar:,.2f}"
+            row_vals[7] = f"{row_vals[7]:,.2f}"
                 
             self.mov_tree.insert("", tk.END, values=row_vals)
 
