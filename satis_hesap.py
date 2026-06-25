@@ -885,7 +885,7 @@ class HausmartApp:
             
             unit_final_price = unit_base_price * (1 + (final_applied_rate / 100))
             total_final_price = unit_final_price * qty
-            total_profit = (total_final_price - (unit_cost * qty)) if unit_cost > 0 else 0.0
+            total_profit = ((unit_base_price - unit_cost) * qty) if unit_cost > 0 else 0.0
 
             self.calculated_data[p_name] = {
                 "unit_price": unit_final_price,
@@ -1330,13 +1330,15 @@ class HausmartApp:
                     sel_conversion_factor = w_q / w_sel
 
                 converted_purchase_price = purchase_price * pur_conversion_factor
+                converted_base_price = base_price * sel_conversion_factor
                 ship_cost = r["nakliye_maliyeti"] if (r["nakliye_dahil"] == 1 and r["nakliye_maliyeti"] is not None) else 0.0
                 unload_cost = r["indirme_maliyeti"] if (r["indirme_dahil"] == 1 and r["indirme_maliyeti"] is not None) else 0.0
 
                 unit_extra_cost = (ship_cost + unload_cost) / qty
                 unit_cost = (converted_purchase_price + unit_extra_cost) if converted_purchase_price > 0 else 0.0
+                unit_base_price = converted_base_price + unit_extra_cost
 
-                expected_profit = (r["toplam_tutar"] - (unit_cost * qty)) if unit_cost > 0 else 0.0
+                expected_profit = ((unit_base_price - unit_cost) * qty) if unit_cost > 0 else 0.0
                 stored_profit = r["kar"] if r["kar"] is not None else 0.0
                 diff = abs(expected_profit - stored_profit)
 

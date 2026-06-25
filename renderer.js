@@ -4,6 +4,14 @@ let currentRole = null;
 let calculatedData = {};
 let selectedSaleRowId = null;
 let selectedUserRowId = null;
+let paymentRates = {
+  'Nakit': 0.0,
+  'Kredi Kartı': 3.0,
+  'Çek': 5.0,
+  'Senet': 8.0,
+  'Evrak': 4.0,
+  'DBS': 2.0
+};
 
 function formatMoney(value) {
   if (value === undefined || value === null || isNaN(value)) return "0,00";
@@ -70,6 +78,15 @@ async function loadPaymentRates() {
   try {
     const rates = await window.api.getRates();
     if (rates) {
+      paymentRates = {
+        'Nakit': rates.rate_cash !== undefined ? rates.rate_cash : 0.0,
+        'Kredi Kartı': rates.rate_cc !== undefined ? rates.rate_cc : 3.0,
+        'Çek': rates.rate_check !== undefined ? rates.rate_check : 5.0,
+        'Senet': rates.rate_note !== undefined ? rates.rate_note : 8.0,
+        'Evrak': rates.rate_doc !== undefined ? rates.rate_doc : 4.0,
+        'DBS': rates.rate_dbs !== undefined ? rates.rate_dbs : 2.0
+      };
+
       const activeEl = document.activeElement;
       const updateVal = (id, val) => {
         const el = document.getElementById(id);
@@ -722,6 +739,11 @@ function runCumulativePriceCalculation() {
     { name: 'DBS', rate: getFloatValue('rate-dbs', 0.0) }
   ];
 
+  // Update global paymentRates
+  paymentTypes.forEach(p => {
+    paymentRates[p.name] = p.rate;
+  });
+
   console.log(`[Calc] qty=${qty}, basePrice=${basePrice}, purchasePrice=${purchasePrice}, bagWeight=${bagWeight}`);
   console.log(`[Calc] uQtyType=${uQtyType}, uPurType=${uPurType}, uSelType=${uSelType}`);
   console.log(`[Calc] purConversionFactor=${purConversionFactor}, selConversionFactor=${selConversionFactor}`);
@@ -740,7 +762,7 @@ function runCumulativePriceCalculation() {
     const finalAppliedRate = p.name === 'Nakit' ? p.rate : (p.rate + totalVadeSurcharge);
     const unitFinalPrice = unitBasePrice * (1 + (finalAppliedRate / 100));
     const totalFinalPrice = unitFinalPrice * qty;
-    const totalProfit = unitCost > 0 ? (totalFinalPrice - (unitCost * qty)) : 0.0;
+    const totalProfit = unitCost > 0 ? ((unitBasePrice - unitCost) * qty) : 0.0;
     const profitMarginPct = (unitCost > 0) ? (totalProfit / (unitCost * qty) * 100) : 0.0;
     
     // Store calculations locally
@@ -1079,18 +1101,12 @@ function runEditSaleCalculation() {
   
   // Get base rate for current payment type
   const currentPayType = document.getElementById('edit-sale-receipt-type').value;
-  let baseRate = 0.0;
-  if (currentPayType === 'Nakit') baseRate = getFloatValue('rate-cash', 0.0);
-  else if (currentPayType === 'Kredi Kartı') baseRate = getFloatValue('rate-cc', 0.0);
-  else if (currentPayType === 'Çek') baseRate = getFloatValue('rate-check', 0.0);
-  else if (currentPayType === 'Senet') baseRate = getFloatValue('rate-note', 0.0);
-  else if (currentPayType === 'Evrak') baseRate = getFloatValue('rate-doc', 0.0);
-  else if (currentPayType === 'DBS') baseRate = getFloatValue('rate-dbs', 0.0);
+  const baseRate = paymentRates[currentPayType] !== undefined ? paymentRates[currentPayType] : 0.0;
 
   const finalAppliedRate = currentPayType === 'Nakit' ? baseRate : (baseRate + totalVadeSurcharge);
   const unitFinalPrice = unitBasePrice * (1 + (finalAppliedRate / 100));
   const totalFinalPrice = unitFinalPrice * qty;
-  const totalProfit = unitCost > 0 ? (totalFinalPrice - (unitCost * qty)) : 0.0;
+  const totalProfit = unitCost > 0 ? ((unitBasePrice - unitCost) * qty) : 0.0;
   const profitMarginPct = (unitCost > 0) ? (totalProfit / (unitCost * qty) * 100) : 0.0;
 
   // Update DOM labels

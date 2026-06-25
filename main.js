@@ -126,13 +126,15 @@ function recalculateAndHealSalesProfits() {
       }
 
       const convertedPurchasePrice = purchasePrice * purConversionFactor;
+      const convertedBasePrice = basePrice * selConversionFactor;
       const shipCost = sale.nakliye_dahil === 1 ? (sale.nakliye_maliyeti || 0.0) : 0.0;
       const unloadCost = sale.indirme_dahil === 1 ? (sale.indirme_maliyeti || 0.0) : 0.0;
 
       const unitExtraCost = (shipCost + unloadCost) / qty;
       const unitCost = convertedPurchasePrice > 0 ? (convertedPurchasePrice + unitExtraCost) : 0.0;
+      const unitBasePrice = convertedBasePrice + unitExtraCost;
 
-      const expectedProfit = unitCost > 0 ? (sale.toplam_tutar - (unitCost * qty)) : 0.0;
+      const expectedProfit = unitCost > 0 ? ((unitBasePrice - unitCost) * qty) : 0.0;
       const storedProfit = sale.kar || 0.0;
       const diff = Math.abs(expectedProfit - storedProfit);
 
