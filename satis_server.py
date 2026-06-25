@@ -49,6 +49,20 @@ def db():
     conn = sqlite3.connect(DB_PATH, timeout=15)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.row_factory = sqlite3.Row
+    try:
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(satislar)")
+        cols = [r["name"] for r in cursor.fetchall()]
+        if "fatura_no" not in cols:
+            cursor.execute("ALTER TABLE satislar ADD COLUMN fatura_no TEXT")
+            cursor.execute("ALTER TABLE satislar ADD COLUMN irsaliye_no TEXT")
+            cursor.execute("ALTER TABLE satislar ADD COLUMN fatura_yolu TEXT")
+            cursor.execute("ALTER TABLE satislar ADD COLUMN teslim_durumu INTEGER DEFAULT 0")
+            cursor.execute("ALTER TABLE satislar ADD COLUMN teslim_yeri TEXT")
+            cursor.execute("ALTER TABLE satislar ADD COLUMN teslim_notu TEXT")
+            conn.commit()
+    except Exception as e:
+        print(f"Db migration error: {e}")
     return conn
 
 # ─── Flask uygulaması ───────────────────────────
@@ -194,7 +208,13 @@ if FLASK_OK:
                 "toplam_tutar": rd["toplam_tutar"],
                 "kar": rd["kar"],
                 "irsaliye_yolu": rd["irsaliye_yolu"],
-                "kar_orani": kar_orani
+                "kar_orani": kar_orani,
+                "fatura_no": rd.get("fatura_no"),
+                "irsaliye_no": rd.get("irsaliye_no"),
+                "fatura_yolu": rd.get("fatura_yolu"),
+                "teslim_durumu": rd.get("teslim_durumu"),
+                "teslim_yeri": rd.get("teslim_yeri"),
+                "teslim_notu": rd.get("teslim_notu")
             })
         return jsonify(res)
 
@@ -207,8 +227,9 @@ if FLASK_OK:
                 tarih, kullanici, musteri_adi, urun_adi, miktar, birim, fiyat_birimi, torba_agirligi,
                 alis_fiyati, baz_satis_fiyati, odeme_turu, vade_ay, vade_orani,
                 birim_fiyat, toplam_tutar, kar, irsaliye_yolu,
-                nakliye_dahil, nakliye_maliyeti, indirme_dahil, indirme_maliyeti, alis_birimi
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                nakliye_dahil, nakliye_maliyeti, indirme_dahil, indirme_maliyeti, alis_birimi,
+                fatura_no, irsaliye_no, fatura_yolu, teslim_durumu, teslim_yeri, teslim_notu
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (
             data["tarih"], data["kullanici"], data.get("musteri_adi"), data.get("urun_adi"),
             data.get("miktar"), data.get("birim"), data.get("fiyat_birimi"), data.get("torba_agirligi"),
@@ -218,7 +239,9 @@ if FLASK_OK:
             data.get("irsaliye_yolu",""),
             data.get("nakliye_dahil",0), data.get("nakliye_maliyeti",0.0),
             data.get("indirme_dahil",0), data.get("indirme_maliyeti",0.0),
-            data.get("alis_birimi","")
+            data.get("alis_birimi",""),
+            data.get("fatura_no", ""), data.get("irsaliye_no", ""), data.get("fatura_yolu", ""),
+            data.get("teslim_durumu", 0), data.get("teslim_yeri", ""), data.get("teslim_notu", "")
         ))
         conn.commit()
         lid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
@@ -245,7 +268,8 @@ if FLASK_OK:
                 tarih=?, musteri_adi=?, urun_adi=?, miktar=?, birim=?, fiyat_birimi=?, torba_agirligi=?,
                 alis_fiyati=?, baz_satis_fiyati=?, odeme_turu=?, vade_ay=?, vade_orani=?,
                 birim_fiyat=?, toplam_tutar=?, kar=?,
-                nakliye_dahil=?, nakliye_maliyeti=?, indirme_dahil=?, indirme_maliyeti=?, alis_birimi=?
+                nakliye_dahil=?, nakliye_maliyeti=?, indirme_dahil=?, indirme_maliyeti=?, alis_birimi=?,
+                fatura_no=?, irsaliye_no=?
             WHERE id=?
         """, (
             data["tarih"], data["musteri_adi"], data["urun_adi"],
@@ -256,6 +280,7 @@ if FLASK_OK:
             data.get("nakliye_dahil",0), data.get("nakliye_maliyeti",0.0),
             data.get("indirme_dahil",0), data.get("indirme_maliyeti",0.0),
             data.get("alis_birimi",""),
+            data.get("fatura_no", ""), data.get("irsaliye_no", ""),
             sid
         ))
         conn.commit()
@@ -275,6 +300,27 @@ if FLASK_OK:
         data = request.get_json()
         conn = db()
         conn.execute("UPDATE satislar SET irsaliye_yolu=? WHERE id=?", (data.get("yol",""), sid))
+        conn.commit()
+        conn.close()
+        return jsonify({"ok": True})
+
+    @app.route("/api/satislar/<int:sid>/fatura", methods=["PUT"])
+    def fatura_guncelle(sid):
+        data = request.get_json()
+        conn = db()
+        conn.execute("UPDATE satislar SET fatura_yolu=? WHERE id=?", (data.get("yol",""), sid))
+        conn.commit()
+        conn.close()
+        return jsonify({"ok": True})
+
+    @app.route("/api/satislar/<int:sid>/teslim", methods=["PUT"])
+    def teslim_guncelle(sid):
+        data = request.get_json()
+        conn = db()
+        conn.execute(
+            "UPDATE satislar SET teslim_durumu=1, teslim_yeri=?, teslim_notu=? WHERE id=?",
+            (data.get("teslim_yeri",""), data.get("teslim_notu",""), sid)
+        )
         conn.commit()
         conn.close()
         return jsonify({"ok": True})

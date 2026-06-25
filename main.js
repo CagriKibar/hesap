@@ -423,7 +423,13 @@ ipcMain.handle('get-sales', async () => {
         toplam_tutar: r.toplam_tutar,
         kar: r.kar,
         irsaliye_yolu: r.irsaliye_yolu,
-        kar_orani: kar_orani
+        kar_orani: kar_orani,
+        fatura_no: r.fatura_no,
+        irsaliye_no: r.irsaliye_no,
+        fatura_yolu: r.fatura_yolu,
+        teslim_durumu: r.teslim_durumu,
+        teslim_yeri: r.teslim_yeri,
+        teslim_notu: r.teslim_notu
       };
     });
   }
@@ -440,8 +446,9 @@ ipcMain.handle('add-sale', async (event, saleData) => {
         tarih, kullanici, musteri_adi, urun_adi, miktar, birim, fiyat_birimi, torba_agirligi,
         alis_fiyati, baz_satis_fiyati, odeme_turu, vade_ay, vade_orani,
         birim_fiyat, toplam_tutar, kar, irsaliye_yolu,
-        nakliye_dahil, nakliye_maliyeti, indirme_dahil, indirme_maliyeti, alis_birimi
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        nakliye_dahil, nakliye_maliyeti, indirme_dahil, indirme_maliyeti, alis_birimi,
+        fatura_no, irsaliye_no, fatura_yolu, teslim_durumu, teslim_yeri, teslim_notu
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     `, [
       saleData.tarih, saleData.kullanici, saleData.musteri_adi, saleData.urun_adi,
       saleData.miktar, saleData.birim, saleData.fiyat_birimi, saleData.torba_agirligi,
@@ -451,7 +458,9 @@ ipcMain.handle('add-sale', async (event, saleData) => {
       saleData.irsaliye_yolu || '',
       saleData.nakliye_dahil || 0, saleData.nakliye_maliyeti || 0.0,
       saleData.indirme_dahil || 0, saleData.indirme_maliyeti || 0.0,
-      saleData.alis_birimi || ''
+      saleData.alis_birimi || '',
+      saleData.fatura_no || '', saleData.irsaliye_no || '', saleData.fatura_yolu || '',
+      saleData.teslim_durumu || 0, saleData.teslim_yeri || '', saleData.teslim_notu || ''
     ]);
     return { id: lastId };
   }
@@ -468,7 +477,8 @@ ipcMain.handle('edit-sale', async (event, { sid, saleData }) => {
         tarih=?, musteri_adi=?, urun_adi=?, miktar=?, birim=?, fiyat_birimi=?, torba_agirligi=?,
         alis_fiyati=?, baz_satis_fiyati=?, odeme_turu=?, vade_ay=?, vade_orani=?,
         birim_fiyat=?, toplam_tutar=?, kar=?,
-        nakliye_dahil=?, nakliye_maliyeti=?, indirme_dahil=?, indirme_maliyeti=?, alis_birimi=?
+        nakliye_dahil=?, nakliye_maliyeti=?, indirme_dahil=?, indirme_maliyeti=?, alis_birimi=?,
+        fatura_no=?, irsaliye_no=?
       WHERE id=?
     `, [
       saleData.tarih, saleData.musteri_adi, saleData.urun_adi,
@@ -479,6 +489,7 @@ ipcMain.handle('edit-sale', async (event, { sid, saleData }) => {
       saleData.nakliye_dahil || 0, saleData.nakliye_maliyeti || 0.0,
       saleData.indirme_dahil || 0, saleData.indirme_maliyeti || 0.0,
       saleData.alis_birimi || '',
+      saleData.fatura_no || '', saleData.irsaliye_no || '',
       sid
     ]);
     return { ok: true };
@@ -576,6 +587,89 @@ ipcMain.handle('view-waybill', async (event, saleId) => {
     }
   } else {
     throw new Error("Bu satış kaydına ait bir irsaliye yüklenmemiş.");
+  }
+});
+
+// Upload Invoice
+ipcMain.handle('upload-invoice', async (event, saleId) => {
+  const cfg = loadConfigSync();
+  
+  // Show file dialog
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Fatura Dosyası Seçin',
+    filters: [
+      { name: 'Resim & Belge', extensions: ['pdf', 'png', 'jpg', 'jpeg'] },
+      { name: 'Tüm Dosyalar', extensions: ['*'] }
+    ],
+    properties: ['openFile']
+  });
+
+  if (result.canceled || result.filePaths.length === 0) {
+    return null;
+  }
+
+  const sourcePath = result.filePaths[0];
+  const ext = path.extname(sourcePath);
+  const destFileName = `fatura_${saleId}${ext}`;
+  
+  // Determine fatura folder location relative to DB folder or cwd
+  let fatFolder = path.join(userDataPath, 'faturalar');
+  if (cfg.mod !== 'istemci' && cfg.db_yolu) {
+    fatFolder = path.join(path.dirname(cfg.db_yolu), 'faturalar');
+  }
+  
+  if (!fs.existsSync(fatFolder)) {
+    fs.mkdirSync(fatFolder, { recursive: true });
+  }
+
+  const destPath = path.join(fatFolder, destFileName);
+  fs.copyFileSync(sourcePath, destPath);
+
+  // Update DB pathway
+  if (cfg.mod === 'istemci') {
+    await apiCall('put', `/api/satislar/${saleId}/fatura`, { yol: destPath });
+  } else {
+    db.execRun("UPDATE satislar SET fatura_yolu=? WHERE id=?", [destPath, saleId]);
+  }
+
+  return destPath;
+});
+
+// View Invoice
+ipcMain.handle('view-invoice', async (event, saleId) => {
+  let sale = null;
+  const cfg = loadConfigSync();
+  
+  if (cfg.mod === 'istemci') {
+    sale = await apiCall('get', `/api/satislar/${saleId}`);
+  } else {
+    const rows = db.execQuery("SELECT fatura_yolu FROM satislar WHERE id=?", [saleId]);
+    sale = rows[0];
+  }
+
+  if (sale && sale.fatura_yolu) {
+    if (fs.existsSync(sale.fatura_yolu)) {
+      shell.openPath(sale.fatura_yolu);
+      return { ok: true };
+    } else {
+      throw new Error(`Fatura dosyası bulunamadı:\n${sale.fatura_yolu}`);
+    }
+  } else {
+    throw new Error("Bu satış kaydına ait bir fatura yüklenmemiş.");
+  }
+});
+
+// Deliver Sale
+ipcMain.handle('deliver-sale', async (event, { saleId, teslim_yeri, teslim_notu }) => {
+  const cfg = loadConfigSync();
+  if (cfg.mod === 'istemci') {
+    return await apiCall('put', `/api/satislar/${saleId}/teslim`, { teslim_yeri, teslim_notu });
+  } else {
+    db.execRun(
+      "UPDATE satislar SET teslim_durumu=1, teslim_yeri=?, teslim_notu=? WHERE id=?",
+      [teslim_yeri || '', teslim_notu || '', saleId]
+    );
+    return { ok: true };
   }
 });
 

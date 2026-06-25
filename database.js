@@ -99,7 +99,13 @@ function createSchema() {
       nakliye_maliyeti REAL DEFAULT 0.0,
       indirme_dahil INTEGER DEFAULT 0,
       indirme_maliyeti REAL DEFAULT 0.0,
-      alis_birimi TEXT
+      alis_birimi TEXT,
+      fatura_no TEXT,
+      irsaliye_no TEXT,
+      fatura_yolu TEXT,
+      teslim_durumu INTEGER DEFAULT 0,
+      teslim_yeri TEXT,
+      teslim_notu TEXT
     )
   `);
 
@@ -113,6 +119,17 @@ function createSchema() {
       dbInstance.run("ALTER TABLE satislar ADD COLUMN indirme_dahil INTEGER DEFAULT 0");
       dbInstance.run("ALTER TABLE satislar ADD COLUMN indirme_maliyeti REAL DEFAULT 0.0");
       dbInstance.run("ALTER TABLE satislar ADD COLUMN alis_birimi TEXT");
+      saveToDisk();
+    }
+    
+    const hasFaturaNo = columns.some(c => c.name === 'fatura_no');
+    if (!hasFaturaNo) {
+      dbInstance.run("ALTER TABLE satislar ADD COLUMN fatura_no TEXT");
+      dbInstance.run("ALTER TABLE satislar ADD COLUMN irsaliye_no TEXT");
+      dbInstance.run("ALTER TABLE satislar ADD COLUMN fatura_yolu TEXT");
+      dbInstance.run("ALTER TABLE satislar ADD COLUMN teslim_durumu INTEGER DEFAULT 0");
+      dbInstance.run("ALTER TABLE satislar ADD COLUMN teslim_yeri TEXT");
+      dbInstance.run("ALTER TABLE satislar ADD COLUMN teslim_notu TEXT");
       saveToDisk();
     }
   } catch (e) {

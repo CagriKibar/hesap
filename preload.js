@@ -22,6 +22,11 @@ contextBridge.exposeInMainWorld('api', {
   uploadWaybill: (saleId) => ipcRenderer.invoke('upload-waybill', saleId),
   viewWaybill: (saleId) => ipcRenderer.invoke('view-waybill', saleId),
   
+  // Invoices & Delivery
+  uploadInvoice: (saleId) => ipcRenderer.invoke('upload-invoice', saleId),
+  viewInvoice: (saleId) => ipcRenderer.invoke('view-invoice', saleId),
+  deliverSale: (saleId, teslim_yeri, teslim_notu) => ipcRenderer.invoke('deliver-sale', { saleId, teslim_yeri, teslim_notu }),
+  
   // Reports
   exportExcel: (data) => ipcRenderer.invoke('export-excel', data),
   exportReceiptPdf: (data) => ipcRenderer.invoke('export-receipt-pdf', data),

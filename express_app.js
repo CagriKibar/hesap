@@ -183,7 +183,13 @@ app.get('/api/satislar', (req, res) => {
         toplam_tutar: r.toplam_tutar,
         kar: r.kar,
         irsaliye_yolu: r.irsaliye_yolu,
-        kar_orani: kar_orani
+        kar_orani: kar_orani,
+        fatura_no: r.fatura_no,
+        irsaliye_no: r.irsaliye_no,
+        fatura_yolu: r.fatura_yolu,
+        teslim_durumu: r.teslim_durumu,
+        teslim_yeri: r.teslim_yeri,
+        teslim_notu: r.teslim_notu
       };
     });
     res.json(result);
@@ -201,8 +207,9 @@ app.post('/api/satislar', (req, res) => {
         tarih, kullanici, musteri_adi, urun_adi, miktar, birim, fiyat_birimi, torba_agirligi,
         alis_fiyati, baz_satis_fiyati, odeme_turu, vade_ay, vade_orani,
         birim_fiyat, toplam_tutar, kar, irsaliye_yolu,
-        nakliye_dahil, nakliye_maliyeti, indirme_dahil, indirme_maliyeti, alis_birimi
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        nakliye_dahil, nakliye_maliyeti, indirme_dahil, indirme_maliyeti, alis_birimi,
+        fatura_no, irsaliye_no, fatura_yolu, teslim_durumu, teslim_yeri, teslim_notu
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     `, [
       data.tarih, data.kullanici, data.musteri_adi, data.urun_adi,
       data.miktar, data.birim, data.fiyat_birimi, data.torba_agirligi,
@@ -212,7 +219,9 @@ app.post('/api/satislar', (req, res) => {
       data.irsaliye_yolu || '',
       data.nakliye_dahil || 0, data.nakliye_maliyeti || 0.0,
       data.indirme_dahil || 0, data.indirme_maliyeti || 0.0,
-      data.alis_birimi || ''
+      data.alis_birimi || '',
+      data.fatura_no || '', data.irsaliye_no || '', data.fatura_yolu || '',
+      data.teslim_durumu || 0, data.teslim_yeri || '', data.teslim_notu || ''
     ]);
     res.status(201).json({ id: lastId });
   } catch (err) {
@@ -246,7 +255,8 @@ app.put('/api/satislar/:id', (req, res) => {
         tarih=?, musteri_adi=?, urun_adi=?, miktar=?, birim=?, fiyat_birimi=?, torba_agirligi=?,
         alis_fiyati=?, baz_satis_fiyati=?, odeme_turu=?, vade_ay=?, vade_orani=?,
         birim_fiyat=?, toplam_tutar=?, kar=?,
-        nakliye_dahil=?, nakliye_maliyeti=?, indirme_dahil=?, indirme_maliyeti=?, alis_birimi=?
+        nakliye_dahil=?, nakliye_maliyeti=?, indirme_dahil=?, indirme_maliyeti=?, alis_birimi=?,
+        fatura_no=?, irsaliye_no=?
       WHERE id=?
     `, [
       data.tarih, data.musteri_adi, data.urun_adi,
@@ -257,6 +267,7 @@ app.put('/api/satislar/:id', (req, res) => {
       data.nakliye_dahil || 0, data.nakliye_maliyeti || 0.0,
       data.indirme_dahil || 0, data.indirme_maliyeti || 0.0,
       data.alis_birimi || '',
+      data.fatura_no || '', data.irsaliye_no || '',
       sid
     ]);
     res.json({ ok: true });
@@ -282,6 +293,33 @@ app.put('/api/satislar/:id/irsaliye', (req, res) => {
   const { yol } = req.body;
   try {
     db.execRun("UPDATE satislar SET irsaliye_yolu=? WHERE id=?", [yol || '', sid]);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ hata: err.message });
+  }
+});
+
+// Update invoice path
+app.put('/api/satislar/:id/fatura', (req, res) => {
+  const sid = parseInt(req.params.id);
+  const { yol } = req.body;
+  try {
+    db.execRun("UPDATE satislar SET fatura_yolu=? WHERE id=?", [yol || '', sid]);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ hata: err.message });
+  }
+});
+
+// Update delivery status
+app.put('/api/satislar/:id/teslim', (req, res) => {
+  const sid = parseInt(req.params.id);
+  const { teslim_yeri, teslim_notu } = req.body;
+  try {
+    db.execRun(
+      "UPDATE satislar SET teslim_durumu=1, teslim_yeri=?, teslim_notu=? WHERE id=?",
+      [teslim_yeri || '', teslim_notu || '', sid]
+    );
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ hata: err.message });

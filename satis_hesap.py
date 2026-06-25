@@ -48,6 +48,21 @@ def db_connect():
     path = cfg.get("db_yolu", os.path.join(_BASE_DIR, "satis_takip.db"))
     conn = sqlite3.connect(path, timeout=15)
     conn.execute("PRAGMA journal_mode=WAL")
+    conn.row_factory = sqlite3.Row
+    try:
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(satislar)")
+        cols = [r["name"] for r in cursor.fetchall()]
+        if "fatura_no" not in cols:
+            cursor.execute("ALTER TABLE satislar ADD COLUMN fatura_no TEXT")
+            cursor.execute("ALTER TABLE satislar ADD COLUMN irsaliye_no TEXT")
+            cursor.execute("ALTER TABLE satislar ADD COLUMN fatura_yolu TEXT")
+            cursor.execute("ALTER TABLE satislar ADD COLUMN teslim_durumu INTEGER DEFAULT 0")
+            cursor.execute("ALTER TABLE satislar ADD COLUMN teslim_yeri TEXT")
+            cursor.execute("ALTER TABLE satislar ADD COLUMN teslim_notu TEXT")
+            conn.commit()
+    except Exception as e:
+        print(f"Db migration error (satis_hesap): {e}")
     return conn
 
 def api_call(method: str, endpoint: str, **kwargs):
@@ -264,7 +279,18 @@ def init_db():
         birim_fiyat REAL,
         toplam_tutar REAL,
         kar REAL,
-        irsaliye_yolu TEXT
+        irsaliye_yolu TEXT,
+        nakliye_dahil INTEGER DEFAULT 0,
+        nakliye_maliyeti REAL DEFAULT 0.0,
+        indirme_dahil INTEGER DEFAULT 0,
+        indirme_maliyeti REAL DEFAULT 0.0,
+        alis_birimi TEXT,
+        fatura_no TEXT,
+        irsaliye_no TEXT,
+        fatura_yolu TEXT,
+        teslim_durumu INTEGER DEFAULT 0,
+        teslim_yeri TEXT,
+        teslim_notu TEXT
     )
     """)
 
@@ -285,12 +311,84 @@ def init_db():
     conn.commit()
     conn.close()
 
+class DeliverSaleDialog(tk.Toplevel):
+    def __init__(self, parent, sale_id):
+        super().__init__(parent)
+        self.title(f"Satışı Teslim Et - ID: {sale_id}")
+        self.geometry("380x280")
+        self.resizable(False, False)
+        self.configure(bg="#f5f5f7")
+        self.transient(parent)
+        self.grab_set()
+        
+        self.sale_id = sale_id
+        self.saved = False
+        
+        self.center_window(380, 280)
+        self.create_widgets()
+        
+    def center_window(self, width, height):
+        screen_width = self.winfo_screenwidth()
+        screen_height = self.winfo_screenheight()
+        x = (screen_width/2) - (width/2)
+        y = (screen_height/2) - (height/2)
+        self.geometry(f'{width}x{height}+{int(x)}+{int(y)}')
+        
+    def create_widgets(self):
+        main_frame = ttk.Frame(self)
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        
+        ttk.Label(main_frame, text=f"Satışı Teslim Et (ID: {self.sale_id})", font=("Helvetica", 11, "bold"), foreground="#1d1d1f").pack(pady=(0, 15))
+        
+        ttk.Label(main_frame, text="Teslim Edilen Yer / Şantiye:").pack(anchor=tk.W, pady=(0, 2))
+        self.ent_yeri = ttk.Entry(main_frame, width=40)
+        self.ent_yeri.pack(pady=(0, 10))
+        
+        ttk.Label(main_frame, text="Teslimat Notu:").pack(anchor=tk.W, pady=(0, 2))
+        self.ent_notu = ttk.Entry(main_frame, width=40)
+        self.ent_notu.pack(pady=(0, 15))
+        
+        btn_frame = ttk.Frame(main_frame)
+        btn_frame.pack(fill=tk.X, side=tk.BOTTOM)
+        
+        ttk.Button(btn_frame, text="Kaydet", command=self.save_delivery).pack(side=tk.RIGHT, padx=5)
+        ttk.Button(btn_frame, text="İptal", command=self.destroy).pack(side=tk.RIGHT)
+        
+    def save_delivery(self):
+        yeri = self.ent_yeri.get().strip()
+        notu = self.ent_notu.get().strip()
+        if not yeri:
+            messagebox.showwarning("Uyarı", "Lütfen teslim edilen yeri giriniz.")
+            return
+            
+        try:
+            if is_client_mode():
+                api_call("put", f"/api/satislar/{self.sale_id}/teslim", json={
+                    "teslim_yeri": yeri,
+                    "teslim_notu": notu
+                })
+            else:
+                conn = db_connect()
+                cursor = conn.cursor()
+                cursor.execute(
+                    "UPDATE satislar SET teslim_durumu=1, teslim_yeri=?, teslim_notu=? WHERE id=?",
+                    (yeri, notu, self.sale_id)
+                )
+                conn.commit()
+                conn.close()
+            
+            messagebox.showinfo("Başarılı", "Satış başarıyla teslim edildi olarak kaydedildi.")
+            self.saved = True
+            self.destroy()
+        except Exception as e:
+            messagebox.showerror("Hata", f"Teslimat kaydedilirken hata oluştu:\n{str(e)}")
+
 # --- Satış Detay Penceresi ---
 class SaleDetailsDialog(tk.Toplevel):
     def __init__(self, parent, sale_id, role):
         super().__init__(parent)
         self.title(f"Satış Detayı - ID: {sale_id}")
-        self.geometry("460x520")
+        self.geometry("460x650")
         self.resizable(False, False)
         self.configure(bg="#f5f5f7")
         self.transient(parent)
@@ -299,7 +397,7 @@ class SaleDetailsDialog(tk.Toplevel):
         self.sale_id = sale_id
         self.role = role
         
-        self.center_window(460, 520)
+        self.center_window(460, 650)
         self.create_widgets()
         
     def center_window(self, width, height):
@@ -350,6 +448,12 @@ class SaleDetailsDialog(tk.Toplevel):
         toplam_tutar = row_dict.get("toplam_tutar", 0.0)
         kar = row_dict.get("kar", 0.0)
         irsaliye_yolu = row_dict.get("irsaliye_yolu", "")
+        fatura_no = row_dict.get("fatura_no", "")
+        irsaliye_no = row_dict.get("irsaliye_no", "")
+        fatura_yolu = row_dict.get("fatura_yolu", "")
+        teslim_durumu = row_dict.get("teslim_durumu", 0)
+        teslim_yeri = row_dict.get("teslim_yeri", "")
+        teslim_notu = row_dict.get("teslim_notu", "")
         odeme_turu = row_dict.get("odeme_turu", "")
         vade_ay = row_dict.get("vade_ay", 0)
         vade_orani = row_dict.get("vade_orani", 0.0)
@@ -371,23 +475,38 @@ class SaleDetailsDialog(tk.Toplevel):
             ("Satış Fiyat Birimi:", fiyat_birimi),
             ("Ödeme Türü:", odeme_turu),
             ("Vade:", f"{vade_ay} Ay (Aylık %{vade_orani:.2f})" if vade_ay > 0 else "Nakit / Vadesiz"),
-            ("Birim Fiyat:", f"{birim_fiyat:,.2f} â‚º"),
-            ("Toplam Tutar:", f"{toplam_tutar:,.2f} â‚º")
+            ("Birim Fiyat:", f"{birim_fiyat:,.2f} ₺"),
+            ("Toplam Tutar:", f"{toplam_tutar:,.2f} ₺")
         ]
         
         if (birim == "TORBA" or fiyat_birimi == "TORBA"):
             details.insert(6, ("Torba Ağırlığı:", f"{torba_agirligi:g} kg"))
             
         if self.role == "Yönetici":
-            details.append(("Alış Fiyatı:", f"{alis_fiyati:,.2f} â‚º"))
+            details.append(("Alış Fiyatı:", f"{alis_fiyati:,.2f} ₺"))
             pct_sign = "+" if kar_orani >= 0 else ""
-            details.append(("Toplam KÃ¢r:", f"{kar:,.2f} â‚º ({pct_sign}{kar_orani:.2f}%)"))
+            details.append(("Toplam Kâr:", f"{kar:,.2f} ₺ ({pct_sign}{kar_orani:.2f}%)"))
             
+        details.append(("İrsaliye No:", irsaliye_no if irsaliye_no else "-"))
+        details.append(("Fatura No:", fatura_no if fatura_no else "-"))
         details.append(("İrsaliye Durumu:", "Yüklendi" if irsaliye_yolu else "Yüklenmedi"))
+        details.append(("Fatura Durumu:", "Yüklendi" if fatura_yolu else "Yüklenmedi"))
+        
+        if irsaliye_yolu and fatura_yolu:
+            details.append(("Eşleşme Durumu:", "Eşleşti (Fatura & İrsaliye)"))
+        else:
+            details.append(("Eşleşme Durumu:", "Eşleşmedi (Belgeler Eksik)"))
+
+        if teslim_durumu == 1:
+            details.append(("Teslimat Durumu:", "Teslim Edildi"))
+            details.append(("Teslim Yeri:", teslim_yeri))
+            details.append(("Teslimat Notu:", teslim_notu))
+        else:
+            details.append(("Teslimat Durumu:", "Teslimat Bekliyor"))
         
         for i, (label_txt, val_txt) in enumerate(details):
-            ttk.Label(grid_frame, text=label_txt, font=("Helvetica", 9, "bold"), foreground="#1d1d1f").grid(row=i, column=0, sticky=tk.W, padx=5, pady=3)
-            ttk.Label(grid_frame, text=val_txt, font=("Helvetica", 9)).grid(row=i, column=1, sticky=tk.W, padx=15, pady=3)
+            ttk.Label(grid_frame, text=label_txt, font=("Helvetica", 9, "bold"), foreground="#1d1d1f").grid(row=i, column=0, sticky=tk.W, padx=5, pady=2)
+            ttk.Label(grid_frame, text=val_txt, font=("Helvetica", 9)).grid(row=i, column=1, sticky=tk.W, padx=15, pady=2)
             
         ttk.Button(main_frame, text="Kapat", command=self.destroy).pack(side=tk.RIGHT)
 
@@ -570,6 +689,8 @@ class HausmartApp:
             self.purchase_price_type = tk.StringVar(value="TORBA")
             self.base_price_type = tk.StringVar(value="TON")
             self.bag_weight = tk.StringVar(value="50")
+            self.fatura_no = tk.StringVar()
+            self.irsaliye_no = tk.StringVar()
             
             self.vade_months = tk.StringVar(value="0")
             self.vade_rate = tk.StringVar(value="0")
@@ -688,6 +809,12 @@ class HausmartApp:
         self.lbl_conversion_info = ttk.Label(lf1, text="", font=("Helvetica", 9, "italic"), foreground="#0071e3")
         self.lbl_conversion_info.grid(row=3, column=2, columnspan=4, sticky=tk.W, padx=5, pady=5)
 
+        ttk.Label(lf1, text="Fatura No:").grid(row=4, column=0, sticky=tk.W, padx=5, pady=5)
+        ttk.Entry(lf1, textvariable=self.fatura_no, width=25).grid(row=4, column=1, padx=5, pady=5)
+
+        ttk.Label(lf1, text="İrsaliye No:").grid(row=4, column=2, sticky=tk.W, padx=5, pady=5)
+        ttk.Entry(lf1, textvariable=self.irsaliye_no, width=25).grid(row=4, column=3, padx=5, pady=5)
+
         # 2. Vade & Ek Maliyetler
         middle_frame = ttk.Frame(main_frame)
         middle_frame.pack(fill=tk.X, pady=(0, 15))
@@ -792,7 +919,7 @@ class HausmartApp:
         self.mov_tree.heading("miktar", text="Miktar")
         self.mov_tree.heading("birim", text="Birim")
         self.mov_tree.heading("tutar", text="Toplam Tutar (â‚º)")
-        self.mov_tree.heading("irsaliye", text="İrsaliye Durumu")
+        self.mov_tree.heading("irsaliye", text="Belge Durumu")
         
         self.mov_tree.column("id", anchor=tk.CENTER, width=50)
         self.mov_tree.column("tarih", anchor=tk.CENTER, width=130)
@@ -816,6 +943,9 @@ class HausmartApp:
         ttk.Button(btn_frame, text="Satışı Görüntüle", command=self.show_sale_details).pack(side=tk.LEFT, padx=5)
         ttk.Button(btn_frame, text="İrsaliye Yükle", command=self.upload_waybill).pack(side=tk.LEFT, padx=5)
         ttk.Button(btn_frame, text="İrsaliyeyi Görüntüle", command=self.view_waybill).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="Fatura Yükle", command=self.upload_invoice).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="Faturayı Görüntüle", command=self.view_invoice).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="Teslim Et", command=self.deliver_sale).pack(side=tk.LEFT, padx=5)
         ttk.Button(btn_frame, text="PDF Fişi Tekrar Çıkar", command=self.regenerate_pdf_from_history).pack(side=tk.LEFT, padx=5)
         ttk.Button(btn_frame, text="Detay PDF Çıkar", command=self.export_sale_detail_pdf).pack(side=tk.LEFT, padx=5)
         ttk.Button(btn_frame, text="Excel Çıktısı Al", command=self.export_sale_detail_excel).pack(side=tk.LEFT, padx=5)
@@ -1113,6 +1243,9 @@ class HausmartApp:
         total_price = price_info["total_price"]
         profit = price_info["profit"] if self.current_role == "Yönetici" else 0.0
         
+        f_no = self.fatura_no.get().strip()
+        i_no = self.irsaliye_no.get().strip()
+        
         try:
             tarih = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             if is_client_mode():
@@ -1133,7 +1266,18 @@ class HausmartApp:
                     "birim_fiyat": unit_price,
                     "toplam_tutar": total_price,
                     "kar": profit,
-                    "irsaliye_yolu": ""
+                    "irsaliye_yolu": "",
+                    "nakliye_dahil": 1 if self.has_shipping.get() else 0,
+                    "nakliye_maliyeti": self.get_float(self.shipping_cost),
+                    "indirme_dahil": 1 if self.has_unloading.get() else 0,
+                    "indirme_maliyeti": self.get_float(self.unloading_cost),
+                    "alis_birimi": self.purchase_price_type.get(),
+                    "fatura_no": f_no,
+                    "irsaliye_no": i_no,
+                    "fatura_yolu": "",
+                    "teslim_durumu": 0,
+                    "teslim_yeri": "",
+                    "teslim_notu": ""
                 })
             else:
                 conn = db_connect()
@@ -1141,18 +1285,29 @@ class HausmartApp:
                 cursor.execute("""
                 INSERT INTO satislar (
                     tarih, kullanici, musteri_adi, urun_adi, miktar, birim, fiyat_birimi, torba_agirligi,
-                    alis_fiyati, baz_satis_fiyati, odeme_turu, vade_ay, vade_orani, birim_fiyat, toplam_tutar, kar, irsaliye_yolu
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    alis_fiyati, baz_satis_fiyati, odeme_turu, vade_ay, vade_orani, birim_fiyat, toplam_tutar, kar, irsaliye_yolu,
+                    nakliye_dahil, nakliye_maliyeti, indirme_dahil, indirme_maliyeti, alis_birimi,
+                    fatura_no, irsaliye_no, fatura_yolu, teslim_durumu, teslim_yeri, teslim_notu
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     tarih, self.current_user, c_name, p_name, q, u_type, self.base_price_type.get(), self.get_float(self.bag_weight),
                     self.get_float(self.purchase_price) if self.current_role == "Yönetici" else 0.0,
                     self.get_float(self.base_price), selected_type, int(self.get_float(self.vade_months)), self.get_float(self.vade_rate),
-                    unit_price, total_price, profit, ""
+                    unit_price, total_price, profit, "",
+                    1 if self.has_shipping.get() else 0, self.get_float(self.shipping_cost),
+                    1 if self.has_unloading.get() else 0, self.get_float(self.unloading_cost),
+                    self.purchase_price_type.get(),
+                    f_no, i_no, "", 0, "", ""
                 ))
                 conn.commit()
                 conn.close()
             
             messagebox.showinfo("Başarılı", "Satış kaydı başarıyla veritabanına kaydedildi.")
+            
+            # Clear fatura/irsaliye no inputs
+            self.fatura_no.set("")
+            self.irsaliye_no.set("")
+            
             self.load_recent_movements()
             self.update_history_products_combobox()
         except Exception as e:
@@ -1461,13 +1616,13 @@ class HausmartApp:
                         rows.append((
                             item["id"], item["tarih"], item["kullanici"], item["musteri_adi"],
                             item["urun_adi"], item["miktar"], item["birim"], item["toplam_tutar"],
-                            item["kar"], item["irsaliye_yolu"], kar_orani
+                            item["kar"], item["irsaliye_yolu"], item.get("fatura_yolu", ""), kar_orani
                         ))
                     else:
                         rows.append((
                             item["id"], item["tarih"], item["kullanici"], item["musteri_adi"],
                             item["urun_adi"], item["miktar"], item["birim"], item["toplam_tutar"],
-                            item["irsaliye_yolu"], kar_orani
+                            item["irsaliye_yolu"], item.get("fatura_yolu", ""), kar_orani
                         ))
             except Exception as e:
                 messagebox.showerror("Bağlantı Hatası", f"Sunucudan veriler alınamadı:\n{e}")
@@ -1486,22 +1641,31 @@ class HausmartApp:
                     rows.append((
                         r["id"], r["tarih"], r["kullanici"], r["musteri_adi"],
                         r["urun_adi"], r["miktar"], r["birim"], r["toplam_tutar"],
-                        r["kar"], r["irsaliye_yolu"], kar_orani
+                        r["kar"], r["irsaliye_yolu"], r["fatura_yolu"], kar_orani
                     ))
                 else:
                     rows.append((
                         r["id"], r["tarih"], r["kullanici"], r["musteri_adi"],
                         r["urun_adi"], r["miktar"], r["birim"], r["toplam_tutar"],
-                        r["irsaliye_yolu"], kar_orani
+                        r["irsaliye_yolu"], r["fatura_yolu"], kar_orani
                     ))
         
         for r in rows:
-            irs_path = r[-2]
+            fatura_path = r[-2]
+            irs_path = r[-3]
             kar_orani = r[-1]
-            irs_status = "Yüklendi" if irs_path else "Yüklenmedi"
             
-            row_vals = list(r[:-2])
-            row_vals.append(irs_status)
+            if irs_path and fatura_path:
+                doc_status = "Eşleşti (Fatura & İrsaliye)"
+            elif fatura_path:
+                doc_status = "📄 Fatura Yüklendi"
+            elif irs_path:
+                doc_status = "📁 İrsaliye Yüklendi"
+            else:
+                doc_status = "❌ Yüklenmedi"
+            
+            row_vals = list(r[:-3])
+            row_vals.append(doc_status)
             
             row_vals[5] = f"{row_vals[5]:g}"
             if self.current_role == "Yönetici":
@@ -1592,6 +1756,90 @@ class HausmartApp:
                 messagebox.showerror("Hata", f"İrsaliye dosyası bulunamadı:\n{path}")
         else:
             messagebox.showwarning("Bilgi", "Bu satış kaydına ait bir irsaliye yüklenmemiş.")
+
+    def upload_invoice(self):
+        selected = self.mov_tree.selection()
+        if not selected:
+            messagebox.showwarning("Uyarı", "Lütfen fatura yüklemek istediğiniz satışı listeden seçin.")
+            return
+            
+        item_vals = self.mov_tree.item(selected[0], "values")
+        satis_id = item_vals[0]
+        
+        file_path = filedialog.askopenfilename(
+            title="Fatura Dosyası Seçin",
+            filetypes=[("Resim & Belge", "*.pdf;*.png;*.jpg;*.jpeg"), ("Tüm Dosyalar", "*.*")]
+        )
+        if not file_path: return
+        
+        os.makedirs("faturalar", exist_ok=True)
+        _, ext = os.path.splitext(file_path)
+        dest_filename = f"fatura_{satis_id}{ext}"
+        dest_path = os.path.join("faturalar", dest_filename)
+        
+        try:
+            shutil.copy2(file_path, dest_path)
+            
+            if is_client_mode():
+                api_call("put", f"/api/satislar/{satis_id}/fatura", json={"yol": dest_path})
+            else:
+                conn = db_connect()
+                cursor = conn.cursor()
+                cursor.execute("UPDATE satislar SET fatura_yolu = ? WHERE id = ?", (dest_path, satis_id))
+                conn.commit()
+                conn.close()
+            
+            messagebox.showinfo("Başarılı", "Fatura dosyası başarıyla yüklendi ve bu satışla ilişkilendirildi.")
+            self.load_recent_movements()
+        except Exception as e:
+            messagebox.showerror("Hata", f"Dosya kopyalanırken hata oluştu:\n{str(e)}")
+
+    def view_invoice(self):
+        selected = self.mov_tree.selection()
+        if not selected:
+            messagebox.showwarning("Uyarı", "Lütfen faturasını görüntülemek istediğiniz satışı listeden seçin.")
+            return
+            
+        item_vals = self.mov_tree.item(selected[0], "values")
+        satis_id = item_vals[0]
+        
+        if is_client_mode():
+            try:
+                data = api_call("get", f"/api/satislar/{satis_id}")
+                path = data.get("fatura_yolu", "")
+                row = (path,) if path else None
+            except Exception as e:
+                messagebox.showerror("Hata", f"Fatura bilgisi alınamadı: {e}")
+                return
+        else:
+            conn = db_connect()
+            cursor = conn.cursor()
+            cursor.execute("SELECT fatura_yolu FROM satislar WHERE id = ?", (satis_id,))
+            row = cursor.fetchone()
+            conn.close()
+        
+        if row and row[0]:
+            path = row[0]
+            if os.path.exists(path):
+                os.startfile(path)
+            else:
+                messagebox.showerror("Hata", f"Fatura dosyası bulunamadı:\n{path}")
+        else:
+            messagebox.showwarning("Bilgi", "Bu satış kaydına ait bir fatura yüklenmemiş.")
+
+    def deliver_sale(self):
+        selected = self.mov_tree.selection()
+        if not selected:
+            messagebox.showwarning("Uyarı", "Lütfen teslim etmek istediğiniz satışı listeden seçin.")
+            return
+            
+        item_vals = self.mov_tree.item(selected[0], "values")
+        satis_id = item_vals[0]
+        
+        dialog = DeliverSaleDialog(self.root, satis_id)
+        self.root.wait_window(dialog)
+        if dialog.saved:
+            self.load_recent_movements()
 
     def regenerate_pdf_from_history(self):
         selected = self.mov_tree.selection()

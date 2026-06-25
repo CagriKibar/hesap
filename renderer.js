@@ -342,6 +342,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   document.getElementById('btn-upload-waybill').addEventListener('click', uploadWaybillFile);
   document.getElementById('btn-view-waybill').addEventListener('click', viewWaybillFile);
+  document.getElementById('btn-upload-invoice').addEventListener('click', uploadInvoiceFile);
+  document.getElementById('btn-view-invoice').addEventListener('click', viewInvoiceFile);
+  document.getElementById('btn-deliver-sale').addEventListener('click', openDeliverSaleModal);
+  document.getElementById('btn-save-deliver-sale').addEventListener('click', saveDeliverSaleRecord);
   document.getElementById('btn-reprint-pdf').addEventListener('click', reprintReceiptPdf);
   document.getElementById('btn-detail-pdf').addEventListener('click', printDetailPdf);
   document.getElementById('btn-detail-excel').addEventListener('click', printDetailExcel);
@@ -973,7 +977,13 @@ async function saveSaleRecord() {
     nakliye_dahil: document.getElementById('has-shipping').checked ? 1 : 0,
     nakliye_maliyeti: getFloatValue('shipping-cost', 0.0),
     indirme_dahil: document.getElementById('has-unloading').checked ? 1 : 0,
-    indirme_maliyeti: getFloatValue('unloading-cost', 0.0)
+    indirme_maliyeti: getFloatValue('unloading-cost', 0.0),
+    fatura_no: document.getElementById('fatura-no').value.trim(),
+    irsaliye_no: document.getElementById('irsaliye-no').value.trim(),
+    fatura_yolu: '',
+    teslim_durumu: 0,
+    teslim_yeri: '',
+    teslim_notu: ''
   };
 
   saleData.birim_fiyat = getSaleBaseUnitPrice(saleData);
@@ -981,6 +991,11 @@ async function saveSaleRecord() {
   try {
     await window.api.addSale(saleData);
     alert('Satış kaydı başarıyla kaydedildi.');
+    
+    // Clear invoice/waybill inputs
+    document.getElementById('fatura-no').value = '';
+    document.getElementById('irsaliye-no').value = '';
+    
     // Refresh tables/lists without clearing the inputs, matching Python behavior
     refreshSalesTable();
     refreshHistoryProducts();
@@ -1005,7 +1020,15 @@ async function refreshSalesTable() {
     }
     
     list.forEach(sale => {
-      const isUploaded = sale.irsaliye_yolu ? '✅ Yüklendi' : '❌ Yüklenmedi';
+      let doc_status = '❌ Yüklenmedi';
+      if (sale.irsaliye_yolu && sale.fatura_yolu) {
+        doc_status = 'Eşleşti (Fatura & İrsaliye)';
+      } else if (sale.fatura_yolu) {
+        doc_status = '📄 Fatura Yüklendi';
+      } else if (sale.irsaliye_yolu) {
+        doc_status = '📁 İrsaliye Yüklendi';
+      }
+      
       const tr = document.createElement('tr');
       tr.setAttribute('data-id', sale.id);
       
@@ -1024,7 +1047,7 @@ async function refreshSalesTable() {
         <td>${sale.birim}</td>
         <td>${formatMoney(sale.toplam_tutar)} ₺</td>
         <td class="manager-col ${currentRole ? '' : 'hidden'}">${profitText}</td>
-        <td>${isUploaded}</td>
+        <td>${doc_status}</td>
         <td>
           <div class="row-actions">
             <button class="btn-action-icon btn-detail" title="Detay Gör" onclick="event.stopPropagation(); handleRowViewDetail(${sale.id})">🔍</button>
@@ -1215,6 +1238,8 @@ async function openEditSaleModal() {
     document.getElementById('edit-sale-vade-rate').value = sale.vade_orani || 0;
     
     document.getElementById('edit-sale-waybill-path').value = sale.irsaliye_yolu ? 'Yüklendi' : 'Yüklenmedi';
+    document.getElementById('edit-sale-fatura-no').value = sale.fatura_no || '';
+    document.getElementById('edit-sale-irsaliye-no').value = sale.irsaliye_no || '';
     
     const hasShipping = sale.nakliye_dahil === 1;
     document.getElementById('edit-sale-has-shipping').checked = hasShipping;
@@ -1276,7 +1301,9 @@ async function saveEditSaleRecord() {
     nakliye_dahil: document.getElementById('edit-sale-has-shipping').checked ? 1 : 0,
     nakliye_maliyeti: getFloatValue('edit-sale-shipping-cost', 0.0),
     indirme_dahil: document.getElementById('edit-sale-has-unloading').checked ? 1 : 0,
-    indirme_maliyeti: getFloatValue('edit-sale-unloading-cost', 0.0)
+    indirme_maliyeti: getFloatValue('edit-sale-unloading-cost', 0.0),
+    fatura_no: document.getElementById('edit-sale-fatura-no').value.trim(),
+    irsaliye_no: document.getElementById('edit-sale-irsaliye-no').value.trim()
   };
 
   try {
@@ -1330,7 +1357,26 @@ async function viewSaleDetail() {
       adminFields.forEach(el => el.classList.add('hidden'));
     }
     
+    document.getElementById('det-irsaliye-no').textContent = sale.irsaliye_no || '-';
+    document.getElementById('det-fatura-no').textContent = sale.fatura_no || '-';
     document.getElementById('det-irsaliye').textContent = sale.irsaliye_yolu ? 'Yüklendi' : 'Yüklenmedi';
+    document.getElementById('det-fatura').textContent = sale.fatura_yolu ? 'Yüklendi' : 'Yüklenmedi';
+    
+    if (sale.irsaliye_yolu && sale.fatura_yolu) {
+      document.getElementById('det-eslesme').textContent = 'Eşleşti (Fatura & İrsaliye)';
+    } else {
+      document.getElementById('det-eslesme').textContent = 'Eşleşmedi (Belgeler Eksik)';
+    }
+
+    if (sale.teslim_durumu === 1) {
+      document.getElementById('det-teslim-durum').textContent = 'Teslim Edildi';
+      document.getElementById('det-teslim-yeri').textContent = sale.teslim_yeri || '-';
+      document.getElementById('det-teslim-notu').textContent = sale.teslim_notu || '-';
+    } else {
+      document.getElementById('det-teslim-durum').textContent = 'Teslimat Bekliyor';
+      document.getElementById('det-teslim-yeri').textContent = '-';
+      document.getElementById('det-teslim-notu').textContent = '-';
+    }
     
     openModal('modal-sale-details');
   } catch (err) {
@@ -1364,6 +1410,66 @@ async function viewWaybillFile() {
     await window.api.viewWaybill(selectedSaleRowId);
   } catch (err) {
     alert(err.message);
+  }
+}
+
+async function uploadInvoiceFile() {
+  if (!selectedSaleRowId) {
+    alert('Lütfen fatura yüklemek istediğiniz satışı listeden seçin.');
+    return;
+  }
+  
+  try {
+    const destPath = await window.api.uploadInvoice(selectedSaleRowId);
+    if (destPath) {
+      alert('Fatura dosyası başarıyla yüklendi.');
+      refreshSalesTable();
+    }
+  } catch (err) {
+    alert(`Dosya yüklenirken hata oluştu:\n${err.message}`);
+  }
+}
+
+async function viewInvoiceFile() {
+  if (!selectedSaleRowId) {
+    alert('Lütfen faturasını görüntülemek istediğiniz satışı listeden seçin.');
+    return;
+  }
+  try {
+    await window.api.viewInvoice(selectedSaleRowId);
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+function openDeliverSaleModal() {
+  if (!selectedSaleRowId) {
+    alert('Lütfen teslim etmek istediğiniz satışı listeden seçin.');
+    return;
+  }
+  document.getElementById('deliver-sale-id').value = selectedSaleRowId;
+  document.getElementById('deliver-sale-yeri').value = '';
+  document.getElementById('deliver-sale-notu').value = '';
+  openModal('modal-deliver-sale');
+}
+
+async function saveDeliverSaleRecord() {
+  const saleId = parseInt(document.getElementById('deliver-sale-id').value);
+  const yeri = document.getElementById('deliver-sale-yeri').value.trim();
+  const notu = document.getElementById('deliver-sale-notu').value.trim();
+  
+  if (!yeri) {
+    alert('Lütfen teslim edilen yer/şantiye bilgisini giriniz.');
+    return;
+  }
+  
+  try {
+    await window.api.deliverSale(saleId, yeri, notu);
+    alert('Satış başarıyla teslim edildi.');
+    closeAllModals();
+    refreshSalesTable();
+  } catch (err) {
+    alert(`Teslimat kaydedilirken hata oluştu:\n${err.message}`);
   }
 }
 
