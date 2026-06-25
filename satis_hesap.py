@@ -67,9 +67,48 @@ def is_share_mode() -> bool:
     return load_config().get("mod") == "paylasim"
 
 def calculate_kar_orani(r):
+    try:
+        if isinstance(r, dict):
+            if "kar_orani" in r and r["kar_orani"] is not None:
+                return r["kar_orani"]
+        elif hasattr(r, "keys"):
+            if "kar_orani" in r.keys() and r["kar_orani"] is not None:
+                return r["kar_orani"]
+    except Exception:
+        pass
+
     qty = r["miktar"] if r["miktar"] is not None else 0.0
     if qty <= 0:
         return 0.0
+
+    has_keys = True
+    try:
+        if isinstance(r, dict):
+            for k in ["baz_satis_fiyati", "alis_fiyati"]:
+                if k not in r:
+                    has_keys = False
+                    break
+        elif hasattr(r, "keys"):
+            for k in ["baz_satis_fiyati", "alis_fiyati"]:
+                if k not in r.keys():
+                    has_keys = False
+                    break
+        else:
+            has_keys = False
+    except Exception:
+        has_keys = False
+
+    if not has_keys:
+        toplam_tutar = 0.0
+        kar = 0.0
+        try:
+            toplam_tutar = r["toplam_tutar"] if r["toplam_tutar"] is not None else 0.0
+            kar = r["kar"] if r["kar"] is not None else 0.0
+        except Exception:
+            pass
+        total_cost = toplam_tutar - kar
+        return (kar / total_cost * 100) if total_cost > 0 else 0.0
+
     base_price = r["baz_satis_fiyati"] if r["baz_satis_fiyati"] is not None else 0.0
     purchase_price = r["alis_fiyati"] if r["alis_fiyati"] is not None else 0.0
     bag_weight = r["torba_agirligi"] if r["torba_agirligi"] is not None else 50.0

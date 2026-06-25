@@ -40,6 +40,61 @@ function getSaleBaseUnitPrice(sale) {
   return basePrice * selConversionFactor;
 }
 
+function calculateSaleProfitMarginPct(sale) {
+  if (sale.kar_orani !== undefined) {
+    return sale.kar_orani;
+  }
+  
+  const qty = sale.miktar || 0.0;
+  if (qty <= 0) return 0.0;
+  const basePrice = sale.baz_satis_fiyati || 0.0;
+  const purchasePrice = sale.alis_fiyati || 0.0;
+  const bagWeight = sale.torba_agirligi || 50.0;
+  const uQtyType = sale.birim || 'TORBA';
+  const uPurType = sale.alis_birimi || uQtyType;
+  const uSelType = sale.fiyat_birimi || uQtyType;
+
+  const weights = {
+    'KG': 1.0,
+    'TON': 1000.0,
+    'TORBA': bagWeight,
+    'M2': 1.0
+  };
+
+  let purConversionFactor = 1.0;
+  if (uQtyType !== uPurType && uQtyType !== 'M2' && uPurType !== 'M2') {
+    const wQ = weights[uQtyType] || 1.0;
+    const wPur = weights[uPurType] || 1.0;
+    purConversionFactor = wQ / wPur;
+  }
+
+  let selConversionFactor = 1.0;
+  if (uQtyType !== uSelType && uQtyType !== 'M2' && uSelType !== 'M2') {
+    const wQ = weights[uQtyType] || 1.0;
+    const wSel = weights[uSelType] || 1.0;
+    selConversionFactor = wQ / wSel;
+  }
+
+  const convertedPurchasePrice = purchasePrice * purConversionFactor;
+  const convertedBasePrice = basePrice * selConversionFactor;
+  const shipCost = sale.nakliye_dahil === 1 ? (sale.nakliye_maliyeti || 0.0) : 0.0;
+  const unloadCost = sale.indirme_dahil === 1 ? (sale.indirme_maliyeti || 0.0) : 0.0;
+
+  const unitExtraCost = (shipCost + unloadCost) / qty;
+  const unitCost = convertedPurchasePrice > 0 ? (convertedPurchasePrice + unitExtraCost) : 0.0;
+  const unitBasePrice = convertedBasePrice + unitExtraCost;
+
+  const expectedProfit = unitCost > 0 ? ((unitBasePrice - unitCost) * qty) : 0.0;
+  
+  if (unitCost > 0) {
+    return expectedProfit / (unitCost * qty) * 100;
+  }
+  
+  // Fallback to old formula if no cost fields available (e.g. connected to old client mode server)
+  const totalCost = sale.toplam_tutar - sale.kar;
+  return totalCost > 0 ? (sale.kar / totalCost * 100) : 0.0;
+}
+
 // Override global dialogs to use native non-blocking Electron APIs
 window.alert = function(message) {
   window.api.showAlert(message, 'Hausmart');
@@ -954,7 +1009,7 @@ async function refreshSalesTable() {
       const tr = document.createElement('tr');
       tr.setAttribute('data-id', sale.id);
       
-      const profitMarginPct = sale.kar_orani !== undefined ? sale.kar_orani : 0.0;
+      const profitMarginPct = calculateSaleProfitMarginPct(sale);
       const profitText = (sale.kar !== undefined && sale.kar !== null)
         ? `${formatMoney(sale.kar)} ₺ (${profitMarginPct >= 0 ? '+' : ''}${profitMarginPct.toFixed(2)}%)`
         : '-';
@@ -1268,7 +1323,7 @@ async function viewSaleDetail() {
     if (currentRole) {
       adminFields.forEach(el => el.classList.remove('hidden'));
       document.getElementById('det-alis').textContent = `${formatMoney(sale.alis_fiyati)} ₺`;
-      const profitMarginPct = sale.kar_orani !== undefined ? sale.kar_orani : 0.0;
+      const profitMarginPct = calculateSaleProfitMarginPct(sale);
       const detKarText = `${formatMoney(sale.kar)} ₺ (${profitMarginPct >= 0 ? '+' : ''}${profitMarginPct.toFixed(2)}%)`;
       document.getElementById('det-kar').textContent = detKarText;
     } else {
