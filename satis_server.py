@@ -75,6 +75,48 @@ if FLASK_OK:
             return jsonify({"hata": "Hesap pasif"}), 403
         return jsonify({"kullanici_adi": row["kullanici_adi"], "rol": row["rol"], "aktif": row["aktif"]})
 
+    def calculate_kar_orani(r):
+        qty = r["miktar"] if r["miktar"] is not None else 0.0
+        if qty <= 0:
+            return 0.0
+        base_price = r["baz_satis_fiyati"] if r["baz_satis_fiyati"] is not None else 0.0
+        purchase_price = r["alis_fiyati"] if r["alis_fiyati"] is not None else 0.0
+        bag_weight = r["torba_agirligi"] if r["torba_agirligi"] is not None else 50.0
+        u_qty_type = r["birim"] if r["birim"] is not None else 'TORBA'
+        u_pur_type = r["alis_birimi"] if r["alis_birimi"] is not None else u_qty_type
+        u_sel_type = r["fiyat_birimi"] if r["fiyat_birimi"] is not None else u_qty_type
+
+        weights = {
+            'KG': 1.0,
+            'TON': 1000.0,
+            'TORBA': bag_weight,
+            'M2': 1.0
+        }
+
+        pur_conversion_factor = 1.0
+        if u_qty_type != u_pur_type and u_qty_type != 'M2' and u_pur_type != 'M2':
+            w_q = weights.get(u_qty_type, 1.0)
+            w_pur = weights.get(u_pur_type, 1.0)
+            pur_conversion_factor = w_q / w_pur
+
+        sel_conversion_factor = 1.0
+        if u_qty_type != u_sel_type and u_qty_type != 'M2' and u_sel_type != 'M2':
+            w_q = weights.get(u_qty_type, 1.0)
+            w_sel = weights.get(u_sel_type, 1.0)
+            sel_conversion_factor = w_q / w_sel
+
+        converted_purchase_price = purchase_price * pur_conversion_factor
+        converted_base_price = base_price * sel_conversion_factor
+        ship_cost = r["nakliye_maliyeti"] if (r["nakliye_dahil"] == 1 and r["nakliye_maliyeti"] is not None) else 0.0
+        unload_cost = r["indirme_maliyeti"] if (r["indirme_dahil"] == 1 and r["indirme_maliyeti"] is not None) else 0.0
+
+        unit_extra_cost = (ship_cost + unload_cost) / qty
+        unit_cost = (converted_purchase_price + unit_extra_cost) if converted_purchase_price > 0 else 0.0
+        unit_base_price = converted_base_price + unit_extra_cost
+
+        expected_profit = ((unit_base_price - unit_cost) * qty) if unit_cost > 0 else 0.0
+        return (expected_profit / (unit_cost * qty) * 100) if unit_cost > 0 else 0.0
+
     def recalculate_and_heal_sales_profits():
         try:
             conn = db()
@@ -134,12 +176,27 @@ if FLASK_OK:
     def satislar_listele():
         recalculate_and_heal_sales_profits()
         conn = db()
-        rows = conn.execute(
-            "SELECT id, tarih, kullanici, musteri_adi, urun_adi, miktar, birim, toplam_tutar, kar, irsaliye_yolu "
-            "FROM satislar ORDER BY id DESC"
-        ).fetchall()
+        rows = conn.execute("SELECT * FROM satislar ORDER BY id DESC").fetchall()
         conn.close()
-        return jsonify([dict(r) for r in rows])
+        
+        res = []
+        for r in rows:
+            rd = dict(r)
+            kar_orani = calculate_kar_orani(r)
+            res.append({
+                "id": rd["id"],
+                "tarih": rd["tarih"],
+                "kullanici": rd["kullanici"],
+                "musteri_adi": rd["musteri_adi"],
+                "urun_adi": rd["urun_adi"],
+                "miktar": rd["miktar"],
+                "birim": rd["birim"],
+                "toplam_tutar": rd["toplam_tutar"],
+                "kar": rd["kar"],
+                "irsaliye_yolu": rd["irsaliye_yolu"],
+                "kar_orani": kar_orani
+            })
+        return jsonify(res)
 
     @app.route("/api/satislar", methods=["POST"])
     def satis_ekle():
@@ -175,7 +232,9 @@ if FLASK_OK:
         conn.close()
         if not row:
             return jsonify({"hata": "Bulunamadı"}), 404
-        return jsonify(dict(row))
+        rd = dict(row)
+        rd["kar_orani"] = calculate_kar_orani(row)
+        return jsonify(rd)
 
     @app.route("/api/satislar/<int:sid>", methods=["PUT"])
     def satis_guncelle(sid):

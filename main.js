@@ -90,6 +90,50 @@ function getSaleBaseUnitPrice(sale) {
   return basePrice * selConversionFactor;
 }
 
+function calculateProfitMarginPct(sale) {
+  const qty = sale.miktar || 0.0;
+  if (qty <= 0) return 0.0;
+  const basePrice = sale.baz_satis_fiyati || 0.0;
+  const purchasePrice = sale.alis_fiyati || 0.0;
+  const bagWeight = sale.torba_agirligi || 50.0;
+  const uQtyType = sale.birim || 'TORBA';
+  const uPurType = sale.alis_birimi || uQtyType;
+  const uSelType = sale.fiyat_birimi || uQtyType;
+
+  const weights = {
+    'KG': 1.0,
+    'TON': 1000.0,
+    'TORBA': bagWeight,
+    'M2': 1.0
+  };
+
+  let purConversionFactor = 1.0;
+  if (uQtyType !== uPurType && uQtyType !== 'M2' && uPurType !== 'M2') {
+    const wQ = weights[uQtyType] || 1.0;
+    const wPur = weights[uPurType] || 1.0;
+    purConversionFactor = wQ / wPur;
+  }
+
+  let selConversionFactor = 1.0;
+  if (uQtyType !== uSelType && uQtyType !== 'M2' && uSelType !== 'M2') {
+    const wQ = weights[uQtyType] || 1.0;
+    const wSel = weights[uSelType] || 1.0;
+    selConversionFactor = wQ / wSel;
+  }
+
+  const convertedPurchasePrice = purchasePrice * purConversionFactor;
+  const convertedBasePrice = basePrice * selConversionFactor;
+  const shipCost = sale.nakliye_dahil === 1 ? (sale.nakliye_maliyeti || 0.0) : 0.0;
+  const unloadCost = sale.indirme_dahil === 1 ? (sale.indirme_maliyeti || 0.0) : 0.0;
+
+  const unitExtraCost = (shipCost + unloadCost) / qty;
+  const unitCost = convertedPurchasePrice > 0 ? (convertedPurchasePrice + unitExtraCost) : 0.0;
+  const unitBasePrice = convertedBasePrice + unitExtraCost;
+
+  const expectedProfit = unitCost > 0 ? ((unitBasePrice - unitCost) * qty) : 0.0;
+  return unitCost > 0 ? (expectedProfit / (unitCost * qty) * 100) : 0.0;
+}
+
 function recalculateAndHealSalesProfits() {
   try {
     const list = db.execQuery("SELECT * FROM satislar");
@@ -365,7 +409,23 @@ ipcMain.handle('get-sales', async () => {
     return await apiCall('get', '/api/satislar');
   } else {
     recalculateAndHealSalesProfits();
-    return db.execQuery("SELECT id, tarih, kullanici, musteri_adi, urun_adi, miktar, birim, toplam_tutar, kar, irsaliye_yolu FROM satislar ORDER BY id DESC");
+    const rows = db.execQuery("SELECT * FROM satislar ORDER BY id DESC");
+    return rows.map(r => {
+      const kar_orani = calculateProfitMarginPct(r);
+      return {
+        id: r.id,
+        tarih: r.tarih,
+        kullanici: r.kullanici,
+        musteri_adi: r.musteri_adi,
+        urun_adi: r.urun_adi,
+        miktar: r.miktar,
+        birim: r.birim,
+        toplam_tutar: r.toplam_tutar,
+        kar: r.kar,
+        irsaliye_yolu: r.irsaliye_yolu,
+        kar_orani: kar_orani
+      };
+    });
   }
 });
 
@@ -433,7 +493,9 @@ ipcMain.handle('get-sale-details', async (event, saleId) => {
   } else {
     const rows = db.execQuery("SELECT * FROM satislar WHERE id=?", [saleId]);
     if (rows.length === 0) throw new Error("Satış bulunamadı.");
-    return rows[0];
+    const r = rows[0];
+    r.kar_orani = calculateProfitMarginPct(r);
+    return r;
   }
 });
 

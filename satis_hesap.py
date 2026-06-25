@@ -66,6 +66,48 @@ def is_client_mode() -> bool:
 def is_share_mode() -> bool:
     return load_config().get("mod") == "paylasim"
 
+def calculate_kar_orani(r):
+    qty = r["miktar"] if r["miktar"] is not None else 0.0
+    if qty <= 0:
+        return 0.0
+    base_price = r["baz_satis_fiyati"] if r["baz_satis_fiyati"] is not None else 0.0
+    purchase_price = r["alis_fiyati"] if r["alis_fiyati"] is not None else 0.0
+    bag_weight = r["torba_agirligi"] if r["torba_agirligi"] is not None else 50.0
+    u_qty_type = r["birim"] if r["birim"] is not None else 'TORBA'
+    u_pur_type = r["alis_birimi"] if r["alis_birimi"] is not None else u_qty_type
+    u_sel_type = r["fiyat_birimi"] if r["fiyat_birimi"] is not None else u_qty_type
+
+    weights = {
+        'KG': 1.0,
+        'TON': 1000.0,
+        'TORBA': bag_weight,
+        'M2': 1.0
+    }
+
+    pur_conversion_factor = 1.0
+    if u_qty_type != u_pur_type and u_qty_type != 'M2' and u_pur_type != 'M2':
+        w_q = weights.get(u_qty_type, 1.0)
+        w_pur = weights.get(u_pur_type, 1.0)
+        pur_conversion_factor = w_q / w_pur
+
+    sel_conversion_factor = 1.0
+    if u_qty_type != u_sel_type and u_qty_type != 'M2' and u_sel_type != 'M2':
+        w_q = weights.get(u_qty_type, 1.0)
+        w_sel = weights.get(u_sel_type, 1.0)
+        sel_conversion_factor = w_q / w_sel
+
+    converted_purchase_price = purchase_price * pur_conversion_factor
+    converted_base_price = base_price * sel_conversion_factor
+    ship_cost = r["nakliye_maliyeti"] if (r["nakliye_dahil"] == 1 and r["nakliye_maliyeti"] is not None) else 0.0
+    unload_cost = r["indirme_maliyeti"] if (r["indirme_dahil"] == 1 and r["indirme_maliyeti"] is not None) else 0.0
+
+    unit_extra_cost = (ship_cost + unload_cost) / qty
+    unit_cost = (converted_purchase_price + unit_extra_cost) if converted_purchase_price > 0 else 0.0
+    unit_base_price = converted_base_price + unit_extra_cost
+
+    expected_profit = ((unit_base_price - unit_cost) * qty) if unit_cost > 0 else 0.0
+    return (expected_profit / (unit_cost * qty) * 100) if unit_cost > 0 else 0.0
+
 
 # --- ReportLab Türkçe Karakter Font Kaydı ---
 from reportlab.pdfbase import pdfmetrics
@@ -232,34 +274,46 @@ class SaleDetailsDialog(tk.Toplevel):
         if is_client_mode():
             try:
                 data = api_call("get", f"/api/satislar/{self.sale_id}")
-                row = (
-                    data["tarih"], data["kullanici"], data.get("musteri_adi"), data.get("urun_adi"),
-                    data.get("miktar"), data.get("birim"), data.get("fiyat_birimi"), data.get("torba_agirligi"),
-                    data.get("alis_fiyati", 0.0), data.get("baz_satis_fiyati", 0.0), data.get("odeme_turu"),
-                    data.get("vade_ay", 0), data.get("vade_orani", 0.0), data.get("birim_fiyat", 0.0),
-                    data.get("toplam_tutar", 0.0), data.get("kar", 0.0), data.get("irsaliye_yolu", "")
-                )
+                row_dict = data
+                kar_orani = data.get("kar_orani", 0.0)
             except Exception as e:
                 messagebox.showerror("Hata", f"Satış bilgisi alınamadı: {e}")
                 self.destroy()
                 return
         else:
             conn = db_connect()
+            conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
-            cursor.execute("""
-            SELECT tarih, kullanici, musteri_adi, urun_adi, miktar, birim, fiyat_birimi, torba_agirligi,
-                   alis_fiyati, baz_satis_fiyati, odeme_turu, vade_ay, vade_orani, birim_fiyat, toplam_tutar, kar, irsaliye_yolu
-            FROM satislar WHERE id = ?
-            """, (self.sale_id,))
-            row = cursor.fetchone()
+            cursor.execute("SELECT * FROM satislar WHERE id = ?", (self.sale_id,))
+            row_obj = cursor.fetchone()
             conn.close()
+            if row_obj:
+                row_dict = dict(row_obj)
+                kar_orani = calculate_kar_orani(row_obj)
+            else:
+                row_dict = None
+                kar_orani = 0.0
         
-        if not row:
+        if not row_dict:
             ttk.Label(self, text="Kayıt bulunamadı.").pack(padx=20, pady=20)
             return
             
-        tarih, kullanici, musteri_adi, urun_adi, miktar, birim, fiyat_birimi, torba_agirligi, \
-        alis_fiyati, baz_satis_fiyati, odeme_turu, vade_ay, vade_orani, birim_fiyat, toplam_tutar, kar, irsaliye_yolu = row
+        tarih = row_dict.get("tarih", "")
+        kullanici = row_dict.get("kullanici", "")
+        musteri_adi = row_dict.get("musteri_adi", "")
+        urun_adi = row_dict.get("urun_adi", "")
+        miktar = row_dict.get("miktar", 0.0)
+        birim = row_dict.get("birim", "")
+        fiyat_birimi = row_dict.get("fiyat_birimi", "")
+        torba_agirligi = row_dict.get("torba_agirligi", 50.0)
+        alis_fiyati = row_dict.get("alis_fiyati", 0.0)
+        birim_fiyat = row_dict.get("birim_fiyat", 0.0)
+        toplam_tutar = row_dict.get("toplam_tutar", 0.0)
+        kar = row_dict.get("kar", 0.0)
+        irsaliye_yolu = row_dict.get("irsaliye_yolu", "")
+        odeme_turu = row_dict.get("odeme_turu", "")
+        vade_ay = row_dict.get("vade_ay", 0)
+        vade_orani = row_dict.get("vade_orani", 0.0)
         
         main_frame = ttk.Frame(self)
         main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
@@ -287,7 +341,8 @@ class SaleDetailsDialog(tk.Toplevel):
             
         if self.role == "Yönetici":
             details.append(("Alış Fiyatı:", f"{alis_fiyati:,.2f} â‚º"))
-            details.append(("Toplam KÃ¢r:", f"{kar:,.2f} â‚º"))
+            pct_sign = "+" if kar_orani >= 0 else ""
+            details.append(("Toplam KÃ¢r:", f"{kar:,.2f} â‚º ({pct_sign}{kar_orani:.2f}%)"))
             
         details.append(("İrsaliye Durumu:", "Yüklendi" if irsaliye_yolu else "Yüklenmedi"))
         
@@ -1362,48 +1417,58 @@ class HausmartApp:
                 items = api_call("get", "/api/satislar")
                 rows = []
                 for item in items:
+                    kar_orani = item.get("kar_orani", 0.0)
                     if self.current_role == "Yönetici":
                         rows.append((
                             item["id"], item["tarih"], item["kullanici"], item["musteri_adi"],
                             item["urun_adi"], item["miktar"], item["birim"], item["toplam_tutar"],
-                            item["kar"], item["irsaliye_yolu"]
+                            item["kar"], item["irsaliye_yolu"], kar_orani
                         ))
                     else:
                         rows.append((
                             item["id"], item["tarih"], item["kullanici"], item["musteri_adi"],
                             item["urun_adi"], item["miktar"], item["birim"], item["toplam_tutar"],
-                            item["irsaliye_yolu"]
+                            item["irsaliye_yolu"], kar_orani
                         ))
             except Exception as e:
                 messagebox.showerror("Bağlantı Hatası", f"Sunucudan veriler alınamadı:\n{e}")
                 return
         else:
             conn = db_connect()
+            conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
-            
-            if self.current_role == "Yönetici":
-                cursor.execute("SELECT id, tarih, kullanici, musteri_adi, urun_adi, miktar, birim, toplam_tutar, kar, irsaliye_yolu FROM satislar ORDER BY id DESC")
-            else:
-                cursor.execute("SELECT id, tarih, kullanici, musteri_adi, urun_adi, miktar, birim, toplam_tutar, irsaliye_yolu FROM satislar ORDER BY id DESC")
-                
-            rows = cursor.fetchall()
+            cursor.execute("SELECT * FROM satislar ORDER BY id DESC")
+            db_rows = cursor.fetchall()
             conn.close()
+            rows = []
+            for r in db_rows:
+                kar_orani = calculate_kar_orani(r)
+                if self.current_role == "Yönetici":
+                    rows.append((
+                        r["id"], r["tarih"], r["kullanici"], r["musteri_adi"],
+                        r["urun_adi"], r["miktar"], r["birim"], r["toplam_tutar"],
+                        r["kar"], r["irsaliye_yolu"], kar_orani
+                    ))
+                else:
+                    rows.append((
+                        r["id"], r["tarih"], r["kullanici"], r["musteri_adi"],
+                        r["urun_adi"], r["miktar"], r["birim"], r["toplam_tutar"],
+                        r["irsaliye_yolu"], kar_orani
+                    ))
         
         for r in rows:
-            irs_path = r[-1]
+            irs_path = r[-2]
+            kar_orani = r[-1]
             irs_status = "Yüklendi" if irs_path else "Yüklenmedi"
             
-            row_vals = list(r[:-1])
+            row_vals = list(r[:-2])
             row_vals.append(irs_status)
             
             row_vals[5] = f"{row_vals[5]:g}"
             if self.current_role == "Yönetici":
-                total_tutar = row_vals[7]
                 kar = row_vals[8]
-                total_cost = total_tutar - kar
-                profit_pct = (kar / total_cost * 100) if total_cost > 0 else 0.0
-                pct_sign = "+" if profit_pct >= 0 else ""
-                row_vals[8] = f"{kar:,.2f} ({pct_sign}{profit_pct:.2f}%)" if total_cost > 0 else f"{kar:,.2f}"
+                pct_sign = "+" if kar_orani >= 0 else ""
+                row_vals[8] = f"{kar:,.2f} ({pct_sign}{kar_orani:.2f}%)"
             row_vals[7] = f"{row_vals[7]:,.2f}"
                 
             self.mov_tree.insert("", tk.END, values=row_vals)

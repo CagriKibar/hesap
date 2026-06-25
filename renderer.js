@@ -954,11 +954,10 @@ async function refreshSalesTable() {
       const tr = document.createElement('tr');
       tr.setAttribute('data-id', sale.id);
       
-      const totalCost = sale.toplam_tutar - sale.kar;
-      const profitMarginPct = totalCost > 0 ? (sale.kar / totalCost * 100) : 0.0;
-      const profitText = (sale.kar !== undefined && sale.kar !== null && totalCost > 0)
+      const profitMarginPct = sale.kar_orani !== undefined ? sale.kar_orani : 0.0;
+      const profitText = (sale.kar !== undefined && sale.kar !== null)
         ? `${formatMoney(sale.kar)} ₺ (${profitMarginPct >= 0 ? '+' : ''}${profitMarginPct.toFixed(2)}%)`
-        : (sale.kar !== undefined && sale.kar !== null ? `${formatMoney(sale.kar)} ₺` : '-');
+        : '-';
 
       tr.innerHTML = `
         <td>${sale.id}</td>
@@ -1269,11 +1268,8 @@ async function viewSaleDetail() {
     if (currentRole) {
       adminFields.forEach(el => el.classList.remove('hidden'));
       document.getElementById('det-alis').textContent = `${formatMoney(sale.alis_fiyati)} ₺`;
-      const totalCost = sale.toplam_tutar - sale.kar;
-      const profitMarginPct = totalCost > 0 ? (sale.kar / totalCost * 100) : 0.0;
-      const detKarText = totalCost > 0 
-        ? `${formatMoney(sale.kar)} ₺ (${profitMarginPct >= 0 ? '+' : ''}${profitMarginPct.toFixed(2)}%)`
-        : `${formatMoney(sale.kar)} ₺`;
+      const profitMarginPct = sale.kar_orani !== undefined ? sale.kar_orani : 0.0;
+      const detKarText = `${formatMoney(sale.kar)} ₺ (${profitMarginPct >= 0 ? '+' : ''}${profitMarginPct.toFixed(2)}%)`;
       document.getElementById('det-kar').textContent = detKarText;
     } else {
       adminFields.forEach(el => el.classList.add('hidden'));
