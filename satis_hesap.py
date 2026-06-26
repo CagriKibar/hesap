@@ -294,6 +294,55 @@ def init_db():
     )
     """)
 
+    # Satış Ürünleri tablosu
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS satis_urunleri (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        satis_id INTEGER NOT NULL,
+        urun_adi TEXT,
+        miktar REAL,
+        birim TEXT,
+        fiyat_birimi TEXT,
+        torba_agirligi REAL,
+        alis_fiyati REAL,
+        baz_satis_fiyati REAL,
+        alis_birimi TEXT,
+        birim_fiyat REAL,
+        toplam_tutar REAL,
+        kar REAL,
+        irsaliye_no TEXT,
+        irsaliye_yolu TEXT,
+        FOREIGN KEY (satis_id) REFERENCES satislar(id) ON DELETE CASCADE
+    )
+    """)
+    conn.commit()
+
+    # Migration for existing records in Python client
+    try:
+        cursor.execute("SELECT COUNT(*) as count FROM satis_urunleri")
+        product_count = cursor.fetchone()["count"]
+        if product_count == 0:
+            cursor.execute("SELECT * FROM satislar")
+            sales = cursor.fetchall()
+            if len(sales) > 0:
+                print(f"[Python Client] Migrating {len(sales)} sales to satis_urunleri...")
+                for s in sales:
+                    cursor.execute("""
+                    INSERT INTO satis_urunleri (
+                        satis_id, urun_adi, miktar, birim, fiyat_birimi, torba_agirligi,
+                        alis_fiyati, baz_satis_fiyati, alis_birimi, birim_fiyat, toplam_tutar, kar,
+                        irsaliye_no, irsaliye_yolu
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        s["id"], s["urun_adi"] or '', s["miktar"] or 0, s["birim"] or 'TORBA', s["fiyat_birimi"] or 'TON', s["torba_agirligi"] or 50.0,
+                        s["alis_fiyati"] or 0, s["baz_satis_fiyati"] or 0, s["alis_birimi"] or '',
+                        s["birim_fiyat"] or 0, s["toplam_tutar"] or 0, s["kar"] or 0,
+                        s["irsaliye_no"] or '', s["irsaliye_yolu"] or ''
+                    ))
+                conn.commit()
+    except Exception as e:
+        print(f"Db migration error (satis_urunleri): {e}")
+
     # Varsayılan kullanıcıları ekle
     defaults = [
         ("superadmin", "super123",  "Süper Admin"),

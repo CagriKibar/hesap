@@ -136,6 +136,57 @@ function createSchema() {
     console.error("Migration error (satislar):", e);
   }
 
+  // 2.5. Sales Products Table
+  dbInstance.run(`
+    CREATE TABLE IF NOT EXISTS satis_urunleri (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      satis_id INTEGER NOT NULL,
+      urun_adi TEXT,
+      miktar REAL,
+      birim TEXT,
+      fiyat_birimi TEXT,
+      torba_agirligi REAL,
+      alis_fiyati REAL,
+      baz_satis_fiyati REAL,
+      alis_birimi TEXT,
+      birim_fiyat REAL,
+      toplam_tutar REAL,
+      kar REAL,
+      irsaliye_no TEXT,
+      irsaliye_yolu TEXT,
+      FOREIGN KEY (satis_id) REFERENCES satislar(id) ON DELETE CASCADE
+    )
+  `);
+
+  // Migrate existing single product records in satislar to satis_urunleri if satis_urunleri is empty
+  try {
+    const productCount = execQuery("SELECT COUNT(*) as count FROM satis_urunleri")[0].count;
+    if (productCount === 0) {
+      const sales = execQuery("SELECT * FROM satislar");
+      if (sales.length > 0) {
+        console.log(`Migrating ${sales.length} existing sales to satis_urunleri...`);
+        for (const s of sales) {
+          dbInstance.run(`
+            INSERT INTO satis_urunleri (
+              satis_id, urun_adi, miktar, birim, fiyat_birimi, torba_agirligi,
+              alis_fiyati, baz_satis_fiyati, alis_birimi, birim_fiyat, toplam_tutar, kar,
+              irsaliye_no, irsaliye_yolu
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `, [
+            s.id, s.urun_adi || '', s.miktar || 0, s.birim || 'TORBA', s.fiyat_birimi || 'TON', s.torba_agirligi || 50.0,
+            s.alis_fiyati || 0, s.baz_satis_fiyati || 0, s.alis_birimi || '',
+            s.birim_fiyat || 0, s.toplam_tutar || 0, s.kar || 0,
+            s.irsaliye_no || '', s.irsaliye_yolu || ''
+          ]);
+        }
+        saveToDisk();
+        console.log("Migration to satis_urunleri completed successfully.");
+      }
+    }
+  } catch (e) {
+    console.error("Migration error (satis_urunleri):", e);
+  }
+
   // 3. Settings (Ayarlar) Table
   dbInstance.run(`
     CREATE TABLE IF NOT EXISTS ayarlar (

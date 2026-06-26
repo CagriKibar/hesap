@@ -61,6 +61,53 @@ def db():
             cursor.execute("ALTER TABLE satislar ADD COLUMN teslim_yeri TEXT")
             cursor.execute("ALTER TABLE satislar ADD COLUMN teslim_notu TEXT")
             conn.commit()
+
+        # Create satis_urunleri table
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS satis_urunleri (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            satis_id INTEGER NOT NULL,
+            urun_adi TEXT,
+            miktar REAL,
+            birim TEXT,
+            fiyat_birimi TEXT,
+            torba_agirligi REAL,
+            alis_fiyati REAL,
+            baz_satis_fiyati REAL,
+            alis_birimi TEXT,
+            birim_fiyat REAL,
+            toplam_tutar REAL,
+            kar REAL,
+            irsaliye_no TEXT,
+            irsaliye_yolu TEXT,
+            FOREIGN KEY (satis_id) REFERENCES satislar(id) ON DELETE CASCADE
+        )
+        """)
+        conn.commit()
+
+        # Migration: Migrate existing records from satislar to satis_urunleri
+        cursor.execute("SELECT COUNT(*) as count FROM satis_urunleri")
+        product_count = cursor.fetchone()["count"]
+        if product_count == 0:
+            cursor.execute("SELECT * FROM satislar")
+            sales = cursor.fetchall()
+            if len(sales) > 0:
+                print(f"[Python Server] Migrating {len(sales)} sales to satis_urunleri...")
+                for s in sales:
+                    cursor.execute("""
+                    INSERT INTO satis_urunleri (
+                        satis_id, urun_adi, miktar, birim, fiyat_birimi, torba_agirligi,
+                        alis_fiyati, baz_satis_fiyati, alis_birimi, birim_fiyat, toplam_tutar, kar,
+                        irsaliye_no, irsaliye_yolu
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        s["id"], s["urun_adi"] or '', s["miktar"] or 0, s["birim"] or 'TORBA', s["fiyat_birimi"] or 'TON', s["torba_agirligi"] or 50.0,
+                        s["alis_fiyati"] or 0, s["baz_satis_fiyati"] or 0, s["alis_birimi"] or '',
+                        s["birim_fiyat"] or 0, s["toplam_tutar"] or 0, s["kar"] or 0,
+                        s["irsaliye_no"] or '', s["irsaliye_yolu"] or ''
+                    ))
+                conn.commit()
+                print("[Python Server] Migration completed successfully.")
     except Exception as e:
         print(f"Db migration error: {e}")
     return conn
@@ -191,12 +238,38 @@ if FLASK_OK:
         recalculate_and_heal_sales_profits()
         conn = db()
         rows = conn.execute("SELECT * FROM satislar ORDER BY id DESC").fetchall()
+        all_products = conn.execute("SELECT * FROM satis_urunleri").fetchall()
         conn.close()
         
+        products_by_sale_id = {}
+        for p in all_products:
+            pd = dict(p)
+            sid = pd["satis_id"]
+            if sid not in products_by_sale_id:
+                products_by_sale_id[sid] = []
+            products_by_sale_id[sid].append(pd)
+
         res = []
         for r in rows:
             rd = dict(r)
             kar_orani = calculate_kar_orani(r)
+            urunler = products_by_sale_id.get(rd["id"], [{
+                "id": None,
+                "satis_id": rd["id"],
+                "urun_adi": rd["urun_adi"],
+                "miktar": rd["miktar"],
+                "birim": rd["birim"],
+                "fiyat_birimi": rd["fiyat_birimi"],
+                "torba_agirligi": rd["torba_agirligi"],
+                "alis_fiyati": rd["alis_fiyati"],
+                "baz_satis_fiyati": rd["baz_satis_fiyati"],
+                "alis_birimi": rd["alis_birimi"],
+                "birim_fiyat": rd["birim_fiyat"],
+                "toplam_tutar": rd["toplam_tutar"],
+                "kar": rd["kar"],
+                "irsaliye_no": rd["irsaliye_no"],
+                "irsaliye_yolu": rd["irsaliye_yolu"]
+            }])
             res.append({
                 "id": rd["id"],
                 "tarih": rd["tarih"],
@@ -214,15 +287,48 @@ if FLASK_OK:
                 "fatura_yolu": rd.get("fatura_yolu"),
                 "teslim_durumu": rd.get("teslim_durumu"),
                 "teslim_yeri": rd.get("teslim_yeri"),
-                "teslim_notu": rd.get("teslim_notu")
+                "teslim_notu": rd.get("teslim_notu"),
+                "urunler": urunler
             })
         return jsonify(res)
 
     @app.route("/api/satislar", methods=["POST"])
     def satis_ekle():
         data = request.get_json()
+        urunler = data.get("urunler", [])
+        
+        summary_urun_adi = data.get("urun_adi", "")
+        summary_miktar = data.get("miktar", 0.0)
+        summary_birim = data.get("birim", "TORBA")
+        summary_fiyat_birimi = data.get("fiyat_birimi", "TON")
+        summary_torba_agirligi = data.get("torba_agirligi", 50.0)
+        summary_alis_fiyati = data.get("alis_fiyati", 0.0)
+        summary_alis_birimi = data.get("alis_birimi", "")
+        summary_baz_satis_fiyati = data.get("baz_satis_fiyati", 0.0)
+        summary_birim_fiyat = data.get("birim_fiyat", 0.0)
+        summary_toplam_tutar = data.get("toplam_tutar", 0.0)
+        summary_kar = data.get("kar", 0.0)
+        summary_irsaliye_no = data.get("irsaliye_no", "")
+        summary_irsaliye_yolu = data.get("irsaliye_yolu", "")
+
+        if len(urunler) > 0:
+            summary_urun_adi = ", ".join([u.get("urun_adi","") for u in urunler])
+            summary_miktar = sum([float(u.get("miktar", 0) or 0) for u in urunler])
+            summary_birim = urunler[0].get("birim", "TORBA")
+            summary_fiyat_birimi = urunler[0].get("fiyat_birimi", "TON")
+            summary_torba_agirligi = float(urunler[0].get("torba_agirligi", 50.0) or 50.0)
+            summary_alis_fiyati = float(urunler[0].get("alis_fiyati", 0.0) or 0.0)
+            summary_alis_birimi = urunler[0].get("alis_birimi", "")
+            summary_baz_satis_fiyati = float(urunler[0].get("baz_satis_fiyati", 0.0) or 0.0)
+            summary_birim_fiyat = float(urunler[0].get("birim_fiyat", 0.0) or 0.0)
+            summary_toplam_tutar = sum([float(u.get("toplam_tutar", 0) or 0) for u in urunler])
+            summary_kar = sum([float(u.get("kar", 0) or 0) for u in urunler])
+            summary_irsaliye_no = ", ".join(filter(None, [u.get("irsaliye_no","") for u in urunler]))
+            summary_irsaliye_yolu = ", ".join(filter(None, [u.get("irsaliye_yolu","") for u in urunler]))
+
         conn = db()
-        conn.execute("""
+        cursor = conn.cursor()
+        cursor.execute("""
             INSERT INTO satislar (
                 tarih, kullanici, musteri_adi, urun_adi, miktar, birim, fiyat_birimi, torba_agirligi,
                 alis_fiyati, baz_satis_fiyati, odeme_turu, vade_ay, vade_orani,
@@ -231,20 +337,49 @@ if FLASK_OK:
                 fatura_no, irsaliye_no, fatura_yolu, teslim_durumu, teslim_yeri, teslim_notu
             ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (
-            data["tarih"], data["kullanici"], data.get("musteri_adi"), data.get("urun_adi"),
-            data.get("miktar"), data.get("birim"), data.get("fiyat_birimi"), data.get("torba_agirligi"),
-            data.get("alis_fiyati",0), data.get("baz_satis_fiyati",0), data.get("odeme_turu"),
+            data["tarih"], data["kullanici"], data.get("musteri_adi"), summary_urun_adi,
+            summary_miktar, summary_birim, summary_fiyat_birimi, summary_torba_agirligi,
+            summary_alis_fiyati, summary_baz_satis_fiyati, data.get("odeme_turu"),
             data.get("vade_ay",0), data.get("vade_orani",0),
-            data.get("birim_fiyat",0), data.get("toplam_tutar",0), data.get("kar",0),
-            data.get("irsaliye_yolu",""),
+            summary_birim_fiyat, summary_toplam_tutar, summary_kar,
+            summary_irsaliye_yolu,
             data.get("nakliye_dahil",0), data.get("nakliye_maliyeti",0.0),
             data.get("indirme_dahil",0), data.get("indirme_maliyeti",0.0),
-            data.get("alis_birimi",""),
-            data.get("fatura_no", ""), data.get("irsaliye_no", ""), data.get("fatura_yolu", ""),
+            summary_alis_birimi,
+            data.get("fatura_no", ""), summary_irsaliye_no, data.get("fatura_yolu", ""),
             data.get("teslim_durumu", 0), data.get("teslim_yeri", ""), data.get("teslim_notu", "")
         ))
+        lid = cursor.execute("SELECT last_insert_rowid()").fetchone()[0]
+        
+        # Insert into satis_urunleri
+        if len(urunler) > 0:
+            for u in urunler:
+                cursor.execute("""
+                    INSERT INTO satis_urunleri (
+                        satis_id, urun_adi, miktar, birim, fiyat_birimi, torba_agirligi,
+                        alis_fiyati, baz_satis_fiyati, alis_birimi, birim_fiyat, toplam_tutar, kar,
+                        irsaliye_no, irsaliye_yolu
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    lid, u.get("urun_adi"), u.get("miktar"), u.get("birim"), u.get("fiyat_birimi"), u.get("torba_agirligi", 50.0),
+                    u.get("alis_fiyati", 0), u.get("baz_satis_fiyati", 0), u.get("alis_birimi", ""),
+                    u.get("birim_fiyat", 0), u.get("toplam_tutar", 0), u.get("kar", 0),
+                    u.get("irsaliye_no", ""), u.get("irsaliye_yolu", "")
+                ))
+        else:
+            cursor.execute("""
+                INSERT INTO satis_urunleri (
+                    satis_id, urun_adi, miktar, birim, fiyat_birimi, torba_agirligi,
+                    alis_fiyati, baz_satis_fiyati, alis_birimi, birim_fiyat, toplam_tutar, kar,
+                    irsaliye_no, irsaliye_yolu
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                lid, summary_urun_adi, summary_miktar, summary_birim, summary_fiyat_birimi, summary_torba_agirligi,
+                summary_alis_fiyati, summary_baz_satis_fiyati, summary_alis_birimi, summary_birim_fiyat, summary_toplam_tutar, summary_kar,
+                summary_irsaliye_no, summary_irsaliye_yolu
+            ))
+            
         conn.commit()
-        lid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
         conn.close()
         return jsonify({"id": lid}), 201
 
@@ -252,18 +387,69 @@ if FLASK_OK:
     def satis_detay(sid):
         conn = db()
         row = conn.execute("SELECT * FROM satislar WHERE id=?", (sid,)).fetchone()
-        conn.close()
         if not row:
+            conn.close()
             return jsonify({"hata": "Bulunamadı"}), 404
         rd = dict(row)
         rd["kar_orani"] = calculate_kar_orani(row)
+        
+        products = conn.execute("SELECT * FROM satis_urunleri WHERE satis_id=?", (sid,)).fetchall()
+        conn.close()
+        
+        rd["urunler"] = [dict(p) for p in products] if len(products) > 0 else [{
+            "id": None,
+            "satis_id": rd["id"],
+            "urun_adi": rd["urun_adi"],
+            "miktar": rd["miktar"],
+            "birim": rd["birim"],
+            "fiyat_birimi": rd["fiyat_birimi"],
+            "torba_agirligi": rd["torba_agirligi"],
+            "alis_fiyati": rd["alis_fiyati"],
+            "baz_satis_fiyati": rd["baz_satis_fiyati"],
+            "alis_birimi": rd["alis_birimi"],
+            "birim_fiyat": rd["birim_fiyat"],
+            "toplam_tutar": rd["toplam_tutar"],
+            "kar": rd["kar"],
+            "irsaliye_no": rd["irsaliye_no"],
+            "irsaliye_yolu": rd["irsaliye_yolu"]
+        }]
         return jsonify(rd)
 
     @app.route("/api/satislar/<int:sid>", methods=["PUT"])
     def satis_guncelle(sid):
         data = request.get_json()
+        urunler = data.get("urunler", [])
+        
+        summary_urun_adi = data.get("urun_adi")
+        summary_miktar = data.get("miktar")
+        summary_birim = data.get("birim")
+        summary_fiyat_birimi = data.get("fiyat_birimi")
+        summary_torba_agirligi = data.get("torba_agirligi")
+        summary_alis_fiyati = data.get("alis_fiyati")
+        summary_alis_birimi = data.get("alis_birimi")
+        summary_baz_satis_fiyati = data.get("baz_satis_fiyati")
+        summary_birim_fiyat = data.get("birim_fiyat")
+        summary_toplam_tutar = data.get("toplam_tutar")
+        summary_kar = data.get("kar")
+        summary_irsaliye_no = data.get("irsaliye_no")
+
+        if len(urunler) > 0:
+            summary_urun_adi = ", ".join([u.get("urun_adi","") for u in urunler])
+            summary_miktar = sum([float(u.get("miktar", 0) or 0) for u in urunler])
+            summary_birim = urunler[0].get("birim")
+            summary_fiyat_birimi = urunler[0].get("fiyat_birimi")
+            summary_torba_agirligi = float(urunler[0].get("torba_agirligi", 50.0) or 50.0)
+            summary_alis_fiyati = float(urunler[0].get("alis_fiyati", 0.0) or 0.0)
+            summary_alis_birimi = urunler[0].get("alis_birimi")
+            summary_baz_satis_fiyati = float(urunler[0].get("baz_satis_fiyati", 0.0) or 0.0)
+            summary_birim_fiyat = float(urunler[0].get("birim_fiyat", 0.0) or 0.0)
+            summary_toplam_tutar = sum([float(u.get("toplam_tutar", 0) or 0) for u in urunler])
+            summary_kar = sum([float(u.get("kar", 0) or 0) for u in urunler])
+            summary_irsaliye_no = ", ".join(filter(None, [u.get("irsaliye_no","") for u in urunler]))
+
         conn = db()
-        conn.execute("""
+        cursor = conn.cursor()
+        cursor.execute("""
             UPDATE satislar SET
                 tarih=?, musteri_adi=?, urun_adi=?, miktar=?, birim=?, fiyat_birimi=?, torba_agirligi=?,
                 alis_fiyati=?, baz_satis_fiyati=?, odeme_turu=?, vade_ay=?, vade_orani=?,
@@ -272,17 +458,47 @@ if FLASK_OK:
                 fatura_no=?, irsaliye_no=?
             WHERE id=?
         """, (
-            data["tarih"], data["musteri_adi"], data["urun_adi"],
-            data["miktar"], data["birim"], data["fiyat_birimi"], data["torba_agirligi"],
-            data.get("alis_fiyati",0), data.get("baz_satis_fiyati",0), data["odeme_turu"],
+            data["tarih"], data["musteri_adi"], summary_urun_adi,
+            summary_miktar, summary_birim, summary_fiyat_birimi, summary_torba_agirligi,
+            summary_alis_fiyati, summary_baz_satis_fiyati, data["odeme_turu"],
             data.get("vade_ay",0), data.get("vade_orani",0),
-            data.get("birim_fiyat",0), data.get("toplam_tutar",0), data.get("kar",0),
+            summary_birim_fiyat, summary_toplam_tutar, summary_kar,
             data.get("nakliye_dahil",0), data.get("nakliye_maliyeti",0.0),
             data.get("indirme_dahil",0), data.get("indirme_maliyeti",0.0),
-            data.get("alis_birimi",""),
-            data.get("fatura_no", ""), data.get("irsaliye_no", ""),
+            summary_alis_birimi,
+            data.get("fatura_no", ""), summary_irsaliye_no,
             sid
         ))
+        
+        # Clear and rebuild product list
+        cursor.execute("DELETE FROM satis_urunleri WHERE satis_id=?", (sid,))
+        if len(urunler) > 0:
+            for u in urunler:
+                cursor.execute("""
+                    INSERT INTO satis_urunleri (
+                        satis_id, urun_adi, miktar, birim, fiyat_birimi, torba_agirligi,
+                        alis_fiyati, baz_satis_fiyati, alis_birimi, birim_fiyat, toplam_tutar, kar,
+                        irsaliye_no, irsaliye_yolu
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    sid, u.get("urun_adi"), u.get("miktar"), u.get("birim"), u.get("fiyat_birimi"), u.get("torba_agirligi", 50.0),
+                    u.get("alis_fiyati", 0), u.get("baz_satis_fiyati", 0), u.get("alis_birimi", ""),
+                    u.get("birim_fiyat", 0), u.get("toplam_tutar", 0), u.get("kar", 0),
+                    u.get("irsaliye_no", ""), u.get("irsaliye_yolu", "")
+                ))
+        else:
+            cursor.execute("""
+                INSERT INTO satis_urunleri (
+                    satis_id, urun_adi, miktar, birim, fiyat_birimi, torba_agirligi,
+                    alis_fiyati, baz_satis_fiyati, alis_birimi, birim_fiyat, toplam_tutar, kar,
+                    irsaliye_no, irsaliye_yolu
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                sid, summary_urun_adi, summary_miktar, summary_birim, summary_fiyat_birimi, summary_torba_agirligi,
+                summary_alis_fiyati, summary_baz_satis_fiyati, summary_alis_birimi, summary_birim_fiyat, summary_toplam_tutar, summary_kar,
+                summary_irsaliye_no, ""
+            ))
+            
         conn.commit()
         conn.close()
         return jsonify({"ok": True})
@@ -290,6 +506,7 @@ if FLASK_OK:
     @app.route("/api/satislar/<int:sid>", methods=["DELETE"])
     def satis_sil(sid):
         conn = db()
+        conn.execute("DELETE FROM satis_urunleri WHERE satis_id=?", (sid,))
         conn.execute("DELETE FROM satislar WHERE id=?", (sid,))
         conn.commit()
         conn.close()
@@ -298,8 +515,19 @@ if FLASK_OK:
     @app.route("/api/satislar/<int:sid>/irsaliye", methods=["PUT"])
     def irsaliye_guncelle(sid):
         data = request.get_json()
+        yol = data.get("yol","")
+        urun_id = data.get("urun_id")
         conn = db()
-        conn.execute("UPDATE satislar SET irsaliye_yolu=? WHERE id=?", (data.get("yol",""), sid))
+        cursor = conn.cursor()
+        if urun_id:
+            cursor.execute("UPDATE satis_urunleri SET irsaliye_yolu=? WHERE id=?", (yol, urun_id))
+            # Update summary paths in satislar
+            products = cursor.execute("SELECT irsaliye_yolu FROM satis_urunleri WHERE satis_id=?", (sid,)).fetchall()
+            joined_paths = ", ".join(filter(None, [p["irsaliye_yolu"] for p in products]))
+            cursor.execute("UPDATE satislar SET irsaliye_yolu=? WHERE id=?", (joined_paths, sid))
+        else:
+            cursor.execute("UPDATE satislar SET irsaliye_yolu=? WHERE id=?", (yol, sid))
+            cursor.execute("UPDATE satis_urunleri SET irsaliye_yolu=? WHERE satis_id=?", (yol, sid))
         conn.commit()
         conn.close()
         return jsonify({"ok": True})

@@ -170,8 +170,35 @@ app.get('/api/satislar', (req, res) => {
     const rows = db.execQuery(
       "SELECT * FROM satislar ORDER BY id DESC"
     );
+    const allProducts = db.execQuery("SELECT * FROM satis_urunleri");
+    const productsBySaleId = {};
+    allProducts.forEach(p => {
+      if (!productsBySaleId[p.satis_id]) {
+        productsBySaleId[p.satis_id] = [];
+      }
+      productsBySaleId[p.satis_id].push(p);
+    });
+
     const result = rows.map(r => {
       const kar_orani = calculateProfitMarginPct(r);
+      const urunler = productsBySaleId[r.id] || [{
+        id: null,
+        satis_id: r.id,
+        urun_adi: r.urun_adi,
+        miktar: r.miktar,
+        birim: r.birim,
+        fiyat_birimi: r.fiyat_birimi,
+        torba_agirligi: r.torba_agirligi,
+        alis_fiyati: r.alis_fiyati,
+        baz_satis_fiyati: r.baz_satis_fiyati,
+        alis_birimi: r.alis_birimi,
+        birim_fiyat: r.birim_fiyat,
+        toplam_tutar: r.toplam_tutar,
+        kar: r.kar,
+        irsaliye_no: r.irsaliye_no,
+        irsaliye_yolu: r.irsaliye_yolu
+      }];
+
       return {
         id: r.id,
         tarih: r.tarih,
@@ -189,7 +216,8 @@ app.get('/api/satislar', (req, res) => {
         fatura_yolu: r.fatura_yolu,
         teslim_durumu: r.teslim_durumu,
         teslim_yeri: r.teslim_yeri,
-        teslim_notu: r.teslim_notu
+        teslim_notu: r.teslim_notu,
+        urunler: urunler
       };
     });
     res.json(result);
@@ -202,6 +230,37 @@ app.get('/api/satislar', (req, res) => {
 app.post('/api/satislar', (req, res) => {
   const data = req.body;
   try {
+    const urunler = data.urunler || [];
+    let summaryUrunAdi = data.urun_adi || '';
+    let summaryMiktar = data.miktar || 0;
+    let summaryBirim = data.birim || 'TORBA';
+    let summaryFiyatBirimi = data.fiyat_birimi || 'TON';
+    let summaryTorbaAgirligi = data.torba_agirligi || 50.0;
+    let summaryAlisFiyati = data.alis_fiyati || 0.0;
+    let summaryAlisBirimi = data.alis_birimi || '';
+    let summaryBazSatisFiyati = data.baz_satis_fiyati || 0.0;
+    let summaryBirimFiyat = data.birim_fiyat || 0.0;
+    let summaryToplamTutar = data.toplam_tutar || 0.0;
+    let summaryKar = data.kar || 0.0;
+    let summaryIrsaliyeNo = data.irsaliye_no || '';
+    let summaryIrsaliyeYolu = data.irsaliye_yolu || '';
+
+    if (urunler.length > 0) {
+      summaryUrunAdi = urunler.map(u => u.urun_adi).join(', ');
+      summaryMiktar = urunler.reduce((sum, u) => sum + (u.miktar || 0), 0);
+      summaryBirim = urunler[0].birim || 'TORBA';
+      summaryFiyatBirimi = urunler[0].fiyat_birimi || 'TON';
+      summaryTorbaAgirligi = urunler[0].torba_agirligi || 50.0;
+      summaryAlisFiyati = urunler[0].alis_fiyati || 0.0;
+      summaryAlisBirimi = urunler[0].alis_birimi || '';
+      summaryBazSatisFiyati = urunler[0].baz_satis_fiyati || 0.0;
+      summaryBirimFiyat = urunler[0].birim_fiyat || 0.0;
+      summaryToplamTutar = urunler.reduce((sum, u) => sum + (u.toplam_tutar || 0), 0);
+      summaryKar = urunler.reduce((sum, u) => sum + (u.kar || 0), 0);
+      summaryIrsaliyeNo = urunler.map(u => u.irsaliye_no).filter(n => n).join(', ');
+      summaryIrsaliyeYolu = urunler.map(u => u.irsaliye_yolu).filter(y => y).join(', ');
+    }
+
     const lastId = db.execInsert(`
       INSERT INTO satislar (
         tarih, kullanici, musteri_adi, urun_adi, miktar, birim, fiyat_birimi, torba_agirligi,
@@ -211,18 +270,48 @@ app.post('/api/satislar', (req, res) => {
         fatura_no, irsaliye_no, fatura_yolu, teslim_durumu, teslim_yeri, teslim_notu
       ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     `, [
-      data.tarih, data.kullanici, data.musteri_adi, data.urun_adi,
-      data.miktar, data.birim, data.fiyat_birimi, data.torba_agirligi,
-      data.alis_fiyati || 0, data.baz_satis_fiyati || 0, data.odeme_turu,
+      data.tarih, data.kullanici, data.musteri_adi, summaryUrunAdi,
+      summaryMiktar, summaryBirim, summaryFiyatBirimi, summaryTorbaAgirligi,
+      summaryAlisFiyati, summaryBazSatisFiyati, data.odeme_turu,
       data.vade_ay || 0, data.vade_orani || 0,
-      data.birim_fiyat || 0, data.toplam_tutar || 0, data.kar || 0,
-      data.irsaliye_yolu || '',
+      summaryBirimFiyat, summaryToplamTutar, summaryKar,
+      summaryIrsaliyeYolu,
       data.nakliye_dahil || 0, data.nakliye_maliyeti || 0.0,
       data.indirme_dahil || 0, data.indirme_maliyeti || 0.0,
-      data.alis_birimi || '',
-      data.fatura_no || '', data.irsaliye_no || '', data.fatura_yolu || '',
+      summaryAlisBirimi,
+      data.fatura_no || '', summaryIrsaliyeNo || '', data.fatura_yolu || '',
       data.teslim_durumu || 0, data.teslim_yeri || '', data.teslim_notu || ''
     ]);
+
+    if (urunler.length > 0) {
+      for (const u of urunler) {
+        db.execInsert(`
+          INSERT INTO satis_urunleri (
+            satis_id, urun_adi, miktar, birim, fiyat_birimi, torba_agirligi,
+            alis_fiyati, baz_satis_fiyati, alis_birimi, birim_fiyat, toplam_tutar, kar,
+            irsaliye_no, irsaliye_yolu
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+          lastId, u.urun_adi, u.miktar, u.birim, u.fiyat_birimi, u.torba_agirligi || 50.0,
+          u.alis_fiyati || 0, u.baz_satis_fiyati || 0, u.alis_birimi || '',
+          u.birim_fiyat || 0, u.toplam_tutar || 0, u.kar || 0,
+          u.irsaliye_no || '', u.irsaliye_yolu || ''
+        ]);
+      }
+    } else {
+      db.execInsert(`
+        INSERT INTO satis_urunleri (
+          satis_id, urun_adi, miktar, birim, fiyat_birimi, torba_agirligi,
+          alis_fiyati, baz_satis_fiyati, alis_birimi, birim_fiyat, toplam_tutar, kar,
+          irsaliye_no, irsaliye_yolu
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        lastId, summaryUrunAdi, summaryMiktar, summaryBirim, summaryFiyatBirimi, summaryTorbaAgirligi,
+        summaryAlisFiyati, summaryBazSatisFiyati, summaryAlisBirimi, summaryBirimFiyat, summaryToplamTutar, summaryKar,
+        summaryIrsaliyeNo, summaryIrsaliyeYolu
+      ]);
+    }
+
     res.status(201).json({ id: lastId });
   } catch (err) {
     res.status(500).json({ hata: err.message });
@@ -239,6 +328,27 @@ app.get('/api/satislar/:id', (req, res) => {
     }
     const r = rows[0];
     r.kar_orani = calculateProfitMarginPct(r);
+    
+    // Fetch products
+    const products = db.execQuery("SELECT * FROM satis_urunleri WHERE satis_id=?", [sid]);
+    r.urunler = products.length > 0 ? products : [{
+      id: null,
+      satis_id: r.id,
+      urun_adi: r.urun_adi,
+      miktar: r.miktar,
+      birim: r.birim,
+      fiyat_birimi: r.fiyat_birimi,
+      torba_agirligi: r.torba_agirligi,
+      alis_fiyati: r.alis_fiyati,
+      baz_satis_fiyati: r.baz_satis_fiyati,
+      alis_birimi: r.alis_birimi,
+      birim_fiyat: r.birim_fiyat,
+      toplam_tutar: r.toplam_tutar,
+      kar: r.kar,
+      irsaliye_no: r.irsaliye_no,
+      irsaliye_yolu: r.irsaliye_yolu
+    }];
+
     res.json(r);
   } catch (err) {
     res.status(500).json({ hata: err.message });
@@ -250,6 +360,35 @@ app.put('/api/satislar/:id', (req, res) => {
   const sid = parseInt(req.params.id);
   const data = req.body;
   try {
+    const urunler = data.urunler || [];
+    let summaryUrunAdi = data.urun_adi;
+    let summaryMiktar = data.miktar;
+    let summaryBirim = data.birim;
+    let summaryFiyatBirimi = data.fiyat_birimi;
+    let summaryTorbaAgirligi = data.torba_agirligi;
+    let summaryAlisFiyati = data.alis_fiyati;
+    let summaryAlisBirimi = data.alis_birimi;
+    let summaryBazSatisFiyati = data.baz_satis_fiyati;
+    let summaryBirimFiyat = data.birim_fiyat;
+    let summaryToplamTutar = data.toplam_tutar;
+    let summaryKar = data.kar;
+    let summaryIrsaliyeNo = data.irsaliye_no;
+
+    if (urunler.length > 0) {
+      summaryUrunAdi = urunler.map(u => u.urun_adi).join(', ');
+      summaryMiktar = urunler.reduce((sum, u) => sum + (u.miktar || 0), 0);
+      summaryBirim = urunler[0].birim;
+      summaryFiyatBirimi = urunler[0].fiyat_birimi;
+      summaryTorbaAgirligi = urunler[0].torba_agirligi;
+      summaryAlisFiyati = urunler[0].alis_fiyati;
+      summaryAlisBirimi = urunler[0].alis_birimi;
+      summaryBazSatisFiyati = urunler[0].baz_satis_fiyati;
+      summaryBirimFiyat = urunler[0].birim_fiyat;
+      summaryToplamTutar = urunler.reduce((sum, u) => sum + (u.toplam_tutar || 0), 0);
+      summaryKar = urunler.reduce((sum, u) => sum + (u.kar || 0), 0);
+      summaryIrsaliyeNo = urunler.map(u => u.irsaliye_no).filter(n => n).join(', ');
+    }
+
     db.execRun(`
       UPDATE satislar SET
         tarih=?, musteri_adi=?, urun_adi=?, miktar=?, birim=?, fiyat_birimi=?, torba_agirligi=?,
@@ -259,17 +398,49 @@ app.put('/api/satislar/:id', (req, res) => {
         fatura_no=?, irsaliye_no=?
       WHERE id=?
     `, [
-      data.tarih, data.musteri_adi, data.urun_adi,
-      data.miktar, data.birim, data.fiyat_birimi, data.torba_agirligi,
-      data.alis_fiyati || 0, data.baz_satis_fiyati || 0, data.odeme_turu,
+      data.tarih, data.musteri_adi, summaryUrunAdi,
+      summaryMiktar, summaryBirim, summaryFiyatBirimi, summaryTorbaAgirligi,
+      summaryAlisFiyati, summaryBazSatisFiyati, data.odeme_turu,
       data.vade_ay || 0, data.vade_orani || 0,
-      data.birim_fiyat || 0, data.toplam_tutar || 0, data.kar || 0,
+      summaryBirimFiyat, summaryToplamTutar, summaryKar,
       data.nakliye_dahil || 0, data.nakliye_maliyeti || 0.0,
       data.indirme_dahil || 0, data.indirme_maliyeti || 0.0,
-      data.alis_birimi || '',
-      data.fatura_no || '', data.irsaliye_no || '',
+      summaryAlisBirimi,
+      data.fatura_no || '', summaryIrsaliyeNo || '',
       sid
     ]);
+
+    // Update products table
+    db.execRun("DELETE FROM satis_urunleri WHERE satis_id=?", [sid]);
+    if (urunler.length > 0) {
+      for (const u of urunler) {
+        db.execInsert(`
+          INSERT INTO satis_urunleri (
+            satis_id, urun_adi, miktar, birim, fiyat_birimi, torba_agirligi,
+            alis_fiyati, baz_satis_fiyati, alis_birimi, birim_fiyat, toplam_tutar, kar,
+            irsaliye_no, irsaliye_yolu
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+          sid, u.urun_adi, u.miktar, u.birim, u.fiyat_birimi, u.torba_agirligi || 50.0,
+          u.alis_fiyati || 0, u.baz_satis_fiyati || 0, u.alis_birimi || '',
+          u.birim_fiyat || 0, u.toplam_tutar || 0, u.kar || 0,
+          u.irsaliye_no || '', u.irsaliye_yolu || ''
+        ]);
+      }
+    } else {
+      db.execInsert(`
+        INSERT INTO satis_urunleri (
+          satis_id, urun_adi, miktar, birim, fiyat_birimi, torba_agirligi,
+          alis_fiyati, baz_satis_fiyati, alis_birimi, birim_fiyat, toplam_tutar, kar,
+          irsaliye_no, irsaliye_yolu
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        sid, summaryUrunAdi, summaryMiktar, summaryBirim, summaryFiyatBirimi, summaryTorbaAgirligi,
+        summaryAlisFiyati, summaryBazSatisFiyati, summaryAlisBirimi, summaryBirimFiyat, summaryToplamTutar, summaryKar,
+        summaryIrsaliyeNo, ''
+      ]);
+    }
+
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ hata: err.message });
@@ -280,6 +451,7 @@ app.put('/api/satislar/:id', (req, res) => {
 app.delete('/api/satislar/:id', (req, res) => {
   const sid = parseInt(req.params.id);
   try {
+    db.execRun("DELETE FROM satis_urunleri WHERE satis_id=?", [sid]);
     db.execRun("DELETE FROM satislar WHERE id=?", [sid]);
     res.json({ ok: true });
   } catch (err) {
@@ -290,9 +462,18 @@ app.delete('/api/satislar/:id', (req, res) => {
 // 7. Update waybill path
 app.put('/api/satislar/:id/irsaliye', (req, res) => {
   const sid = parseInt(req.params.id);
-  const { yol } = req.body;
+  const { yol, urun_id } = req.body;
   try {
-    db.execRun("UPDATE satislar SET irsaliye_yolu=? WHERE id=?", [yol || '', sid]);
+    if (urun_id) {
+      db.execRun("UPDATE satis_urunleri SET irsaliye_yolu=? WHERE id=?", [yol || '', urun_id]);
+      // Update summary irsaliye_yolu in satislar
+      const products = db.execQuery("SELECT irsaliye_yolu FROM satis_urunleri WHERE satis_id=?", [sid]);
+      const joinedPaths = products.map(p => p.irsaliye_yolu).filter(y => y).join(', ');
+      db.execRun("UPDATE satislar SET irsaliye_yolu=? WHERE id=?", [joinedPaths, sid]);
+    } else {
+      db.execRun("UPDATE satislar SET irsaliye_yolu=? WHERE id=?", [yol || '', sid]);
+      db.execRun("UPDATE satis_urunleri SET irsaliye_yolu=? WHERE satis_id=?", [yol || '', sid]);
+    }
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ hata: err.message });

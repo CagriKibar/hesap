@@ -105,17 +105,43 @@
             <!-- 1. Ürün ve Müşteri Bilgileri Card -->
             <div class="card">
               <div class="card-header">
-                <h3>Ürün ve Müşteri Bilgileri</h3>
+                <h3>Müşteri & Satış Bilgileri</h3>
               </div>
               <div class="card-body">
                 <div class="form-row">
-                  <div class="form-group col-6">
+                  <div class="form-group col-4">
                     <label for="cust-name">Müşteri Adı / Unvanı</label>
                     <input type="text" id="cust-name" placeholder="Müşteri adını girin">
                   </div>
+                  <div class="form-group col-4">
+                    <label for="receipt-type">Fişe Yansıyacak Tür</label>
+                    <select id="receipt-type">
+                      <option value="Nakit" selected>Nakit</option>
+                      <option value="Kredi Kartı">Kredi Kartı</option>
+                      <option value="Çek">Çek</option>
+                      <option value="Senet">Senet</option>
+                      <option value="Evrak">Evrak</option>
+                      <option value="DBS">DBS</option>
+                    </select>
+                  </div>
+                  <div class="form-group col-4">
+                    <label for="fatura-no">Fatura No</label>
+                    <input type="text" id="fatura-no" placeholder="Örn: FAT-123">
+                  </div>
+                </div>
+
+                <div style="margin-top: 15px; margin-bottom: 10px; border-top: 1px solid var(--border-color); padding-top: 15px;">
+                  <h4 style="font-size: 0.9rem; margin-bottom: 10px; color: var(--text-primary);">Ürün Ekle</h4>
+                </div>
+
+                <div class="form-row">
                   <div class="form-group col-6">
                     <label for="prod-name">Ürün Adı / Kodu (*)</label>
                     <input type="text" id="prod-name" placeholder="Ürün adını girin">
+                  </div>
+                  <div class="form-group col-6">
+                    <label for="irsaliye-no">İrsaliye No</label>
+                    <input type="text" id="irsaliye-no" placeholder="Örn: IRS-456">
                   </div>
                 </div>
 
@@ -141,7 +167,7 @@
 
                 <div class="form-row">
                   <div class="form-group col-6 manager-only hidden">
-                    <label for="purchase-price">Alış Fiyati (Opsiyonel)</label>
+                    <label for="purchase-price">Alış Fiyatı (Opsiyonel)</label>
                     <input type="text" id="purchase-price" placeholder="0.00">
                   </div>
                   <div class="form-group col-6 manager-only hidden">
@@ -172,29 +198,42 @@
                 </div>
 
                 <div class="form-row">
-                  <div class="form-group col-4">
-                    <label for="receipt-type">Fişe Yansıyacak Tür</label>
-                    <select id="receipt-type">
-                      <option value="Nakit" selected>Nakit</option>
-                      <option value="Kredi Kartı">Kredi Kartı</option>
-                      <option value="Çek">Çek</option>
-                      <option value="Senet">Senet</option>
-                      <option value="Evrak">Evrak</option>
-                      <option value="DBS">DBS</option>
-                    </select>
-                  </div>
-                  <div class="form-group col-4">
-                    <label for="fatura-no">Fatura No</label>
-                    <input type="text" id="fatura-no" placeholder="Örn: FAT-123">
-                  </div>
-                  <div class="form-group col-4">
-                    <label for="irsaliye-no">İrsaliye No</label>
-                    <input type="text" id="irsaliye-no" placeholder="Örn: IRS-456">
+                  <div class="form-group col-12">
+                    <button id="btn-add-product-to-list" class="btn btn-secondary btn-block" style="margin-top: 5px;">➕ Ürünü Satışa Ekle</button>
                   </div>
                 </div>
 
                 <div id="conversion-info-banner" class="info-banner hidden">
                   <!-- Auto conversion message here -->
+                </div>
+              </div>
+            </div>
+
+            <!-- 1.5. Eklenen Ürünler Card -->
+            <div class="card" id="added-products-card">
+              <div class="card-header">
+                <h3>Satıştaki Ürünler</h3>
+              </div>
+              <div class="card-body" style="padding: 0;">
+                <div class="table-wrapper" style="max-height: 180px;">
+                  <table class="data-table" id="added-products-table">
+                    <thead>
+                      <tr>
+                        <th>Ürün Adı</th>
+                        <th>Miktar</th>
+                        <th>Birim</th>
+                        <th class="manager-col">Alış Fiyatı</th>
+                        <th>Baz Satış Fiyatı</th>
+                        <th>İrsaliye No</th>
+                        <th style="text-align: center;">İşlem</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td colspan="7" style="text-align: center; color: var(--text-secondary); padding: 15px;">Henüz ürün eklenmedi. Lütfen alanları doldurup "Ürünü Satışa Ekle" butonuna basın.</td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>
@@ -629,7 +668,7 @@
   </div>
 
   <!-- 2. SATIŞ DETAY MODAL -->
-  <div id="modal-sale-details" class="modal-card hidden">
+  <div id="modal-sale-details" class="modal-card hidden" style="width: 750px;">
     <div class="modal-header">
       <h3 id="detail-title">Satış Detayı - ID: -</h3>
       <button class="btn-close-modal">&times;</button>
@@ -639,24 +678,52 @@
         <div class="detail-row"><strong>Tarih:</strong> <span id="det-tarih">-</span></div>
         <div class="detail-row"><strong>Satışı Yapan:</strong> <span id="det-kullanici">-</span></div>
         <div class="detail-row"><strong>Müşteri:</strong> <span id="det-musteri">-</span></div>
-        <div class="detail-row"><strong>Ürün Adı:</strong> <span id="det-urun">-</span></div>
-        <div class="detail-row"><strong>Miktar:</strong> <span id="det-miktar">-</span></div>
-        <div class="detail-row"><strong>Fiyat Birimi:</strong> <span id="det-fiyat-birimi">-</span></div>
-        <div id="det-row-torba" class="detail-row hidden"><strong>Torba Ağırlığı:</strong> <span id="det-torba">-</span></div>
         <div class="detail-row"><strong>Ödeme Türü:</strong> <span id="det-odeme">-</span></div>
         <div class="detail-row"><strong>Vade:</strong> <span id="det-vade">-</span></div>
-        <div class="detail-row"><strong>Birim Fiyat:</strong> <span id="det-birim-fiyat">-</span></div>
         <div class="detail-row"><strong>Toplam Tutar:</strong> <span id="det-toplam">-</span></div>
         <div class="detail-row manager-only hidden"><strong>Alış Fiyatı:</strong> <span id="det-alis">-</span></div>
         <div class="detail-row manager-only hidden"><strong>Toplam Kâr:</strong> <span id="det-kar">-</span></div>
-        <div class="detail-row"><strong>İrsaliye No:</strong> <span id="det-irsaliye-no">-</span></div>
         <div class="detail-row"><strong>Fatura No:</strong> <span id="det-fatura-no">-</span></div>
-        <div class="detail-row"><strong>İrsaliye Durumu:</strong> <span id="det-irsaliye">-</span></div>
         <div class="detail-row"><strong>Fatura Durumu:</strong> <span id="det-fatura">-</span></div>
         <div class="detail-row"><strong>Eşleşme Durumu:</strong> <span id="det-eslesme">-</span></div>
         <div class="detail-row"><strong>Teslimat Durumu:</strong> <span id="det-teslim-durum">-</span></div>
         <div class="detail-row"><strong>Teslim Yeri:</strong> <span id="det-teslim-yeri">-</span></div>
         <div class="detail-row"><strong>Teslimat Notu:</strong> <span id="det-teslim-notu">-</span></div>
+      </div>
+      
+      <!-- Deprecated / Backwards compatibility summaries -->
+      <div class="details-grid" style="display:none;">
+        <div class="detail-row"><span id="det-urun">-</span></div>
+        <div class="detail-row"><span id="det-miktar">-</span></div>
+        <div class="detail-row"><span id="det-fiyat-birimi">-</span></div>
+        <div id="det-row-torba" class="detail-row hidden"><span id="det-torba">-</span></div>
+        <div class="detail-row"><span id="det-birim-fiyat">-</span></div>
+        <div class="detail-row"><span id="det-irsaliye-no">-</span></div>
+        <div class="detail-row"><span id="det-irsaliye">-</span></div>
+      </div>
+
+      <div style="margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 15px;">
+        <h4 style="font-size: 0.95rem; margin-bottom: 10px; color: var(--text-primary);">Satışa Dahil Ürünler</h4>
+        <div class="table-wrapper" style="overflow-x: auto;">
+          <table class="data-table" id="det-products-table">
+            <thead>
+              <tr>
+                <th>Ürün Adı</th>
+                <th>Miktar</th>
+                <th>Birim</th>
+                <th>Birim Fiyatı</th>
+                <th>Toplam Tutar</th>
+                <th class="manager-col hidden">Alış Fiyatı</th>
+                <th class="manager-col hidden">Kâr</th>
+                <th>İrsaliye No</th>
+                <th>İrsaliye Dosyası</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- Filled dynamically -->
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
     <div class="modal-footer">
@@ -745,90 +812,21 @@
   </div>
 
   <!-- 6. SATIŞ GÜNCELLE MODAL -->
-  <div id="modal-edit-sale" class="modal-card hidden" style="width: 550px;">
+  <div id="modal-edit-sale" class="modal-card hidden" style="width: 750px;">
     <div class="modal-header">
       <h3 id="edit-sale-title">Satış Kaydını Düzenle - ID: -</h3>
       <button class="btn-close-modal">&times;</button>
     </div>
-    <div class="modal-body" style="max-height: 480px; overflow-y: auto;">
+    <div class="modal-body" style="max-height: 520px; overflow-y: auto;">
       <input type="hidden" id="edit-sale-id">
       
+      <!-- Sale level inputs -->
       <div class="form-row">
-        <div class="form-group col-6">
+        <div class="form-group col-4">
           <label for="edit-sale-cust-name">Müşteri Adı / Unvanı</label>
           <input type="text" id="edit-sale-cust-name">
         </div>
-        <div class="form-group col-6">
-          <label for="edit-sale-prod-name">Ürün Adı / Kodu</label>
-          <input type="text" id="edit-sale-prod-name">
-        </div>
-      </div>
-      
-      <div class="form-row">
         <div class="form-group col-4">
-          <label for="edit-sale-unit-type">Miktar Birimi</label>
-          <select id="edit-sale-unit-type">
-            <option value="TORBA">TORBA</option>
-            <option value="KG">KG</option>
-            <option value="TON">TON</option>
-            <option value="M2">M2</option>
-          </select>
-        </div>
-        <div class="form-group col-4">
-          <label for="edit-sale-qty">Miktar</label>
-          <input type="text" id="edit-sale-qty">
-        </div>
-        <div class="form-group col-4">
-          <label for="edit-sale-bag-weight">Torba Ağırlığı (kg)</label>
-          <input type="text" id="edit-sale-bag-weight">
-        </div>
-      </div>
-      
-      <div class="form-row">
-        <div class="form-group col-6">
-          <label for="edit-sale-purchase-price">Alış Fiyatı</label>
-          <input type="text" id="edit-sale-purchase-price">
-        </div>
-        <div class="form-group col-6">
-          <label for="edit-sale-purchase-price-type">Alış Fiyat Birimi</label>
-          <select id="edit-sale-purchase-price-type">
-            <option value="TORBA">TORBA</option>
-            <option value="KG">KG</option>
-            <option value="TON">TON</option>
-            <option value="M2">M2</option>
-          </select>
-        </div>
-      </div>
-      
-      <div class="form-row">
-        <div class="form-group col-6">
-          <label for="edit-sale-base-price">Baz Satış Fiyatı</label>
-          <input type="text" id="edit-sale-base-price">
-        </div>
-        <div class="form-group col-6">
-          <label for="edit-sale-base-price-type">Satış Fiyat Birimi</label>
-          <select id="edit-sale-base-price-type">
-            <option value="TON">TON</option>
-            <option value="TORBA">TORBA</option>
-            <option value="KG">KG</option>
-            <option value="M2">M2</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="form-row">
-        <div class="form-group col-6">
-          <label for="edit-sale-fatura-no">Fatura No</label>
-          <input type="text" id="edit-sale-fatura-no">
-        </div>
-        <div class="form-group col-6">
-          <label for="edit-sale-irsaliye-no">İrsaliye No</label>
-          <input type="text" id="edit-sale-irsaliye-no">
-        </div>
-      </div>
-
-      <div class="form-row">
-        <div class="form-group col-6">
           <label for="edit-sale-receipt-type">Ödeme Türü</label>
           <select id="edit-sale-receipt-type">
             <option value="Nakit">Nakit</option>
@@ -839,6 +837,13 @@
             <option value="DBS">DBS</option>
           </select>
         </div>
+        <div class="form-group col-4">
+          <label for="edit-sale-fatura-no">Fatura No</label>
+          <input type="text" id="edit-sale-fatura-no">
+        </div>
+      </div>
+      
+      <div class="form-row">
         <div class="form-group col-6">
           <label for="edit-sale-vade-months">Vade Süresi (Ay)</label>
           <select id="edit-sale-vade-months">
@@ -857,21 +862,14 @@
             <option value="12">12 Ay</option>
           </select>
         </div>
-      </div>
-
-      <div class="form-row">
         <div class="form-group col-6">
           <label for="edit-sale-vade-rate">Aylık Vade Farkı (%)</label>
           <input type="text" id="edit-sale-vade-rate">
         </div>
-        <div class="form-group col-6">
-          <label for="edit-sale-waybill-path">İrsaliye Dosya Yolu</label>
-          <input type="text" id="edit-sale-waybill-path" placeholder="Yüklenmedi" disabled>
-        </div>
       </div>
 
       <!-- Ek Hizmetler -->
-      <div style="margin-top: 10px; margin-bottom: 10px; padding: 10px; background-color: rgba(255, 255, 255, 0.02); border-radius: 6px; border: 1px solid var(--border-color);">
+      <div style="margin-top: 10px; margin-bottom: 15px; padding: 10px; background-color: rgba(255, 255, 255, 0.02); border-radius: 6px; border: 1px solid var(--border-color);">
         <h4 style="font-size: 0.85rem; margin-bottom: 8px; color: var(--text-primary);">Ek Hizmetler (Tutar Üstüne)</h4>
         <div class="form-row">
           <div class="col-6 flex-row align-center gap-10">
@@ -880,7 +878,7 @@
               <span class="checkmark"></span>
               Nakliye Dahil
             </label>
-            <input type="text" id="edit-sale-shipping-cost" placeholder="Maliyet ₺" class="input-inline" style="width: 80px !important;" disabled>
+            <input type="text" id="edit-sale-shipping-cost" placeholder="Maliyet ₺" class="input-inline" style="width: 100px !important;" disabled>
           </div>
           <div class="col-6 flex-row align-center gap-10">
             <label class="checkbox-container" style="margin-bottom: 0;">
@@ -888,25 +886,111 @@
               <span class="checkmark"></span>
               İndirme Dahil
             </label>
-            <input type="text" id="edit-sale-unloading-cost" placeholder="Maliyet ₺" class="input-inline" style="width: 80px !important;" disabled>
+            <input type="text" id="edit-sale-unloading-cost" placeholder="Maliyet ₺" class="input-inline" style="width: 100px !important;" disabled>
           </div>
         </div>
       </div>
 
+      <!-- Products Table in Edit modal -->
+      <div style="margin-top: 15px; border-top: 1px solid var(--border-color); padding-top: 10px;">
+        <h4 style="font-size: 0.9rem; margin-bottom: 8px; color: var(--text-primary);">Satıştaki Ürünler</h4>
+        <div class="table-wrapper" style="max-height: 150px;">
+          <table class="data-table" id="edit-sale-products-table">
+            <thead>
+              <tr>
+                <th>Ürün Adı</th>
+                <th>Miktar</th>
+                <th>Birim</th>
+                <th class="manager-col hidden">Alış Fiyatı</th>
+                <th>Baz Satış Fiyatı</th>
+                <th>İrsaliye No</th>
+                <th style="text-align: center;">İşlem</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- Products filled dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Add Product Form inside Edit modal -->
+      <div style="margin-top: 15px; background-color: rgba(255, 255, 255, 0.01); padding: 10px; border-radius: 6px; border: 1px solid var(--border-color);">
+        <h5 style="font-size: 0.85rem; margin-bottom: 8px; color: var(--text-primary);">Yeni Ürün Ekle</h5>
+        
+        <div class="form-row">
+          <div class="form-group col-6">
+            <label for="edit-sale-new-prod-name">Ürün Adı / Kodu (*)</label>
+            <input type="text" id="edit-sale-new-prod-name" placeholder="Ürün adını girin">
+          </div>
+          <div class="form-group col-6">
+            <label for="edit-sale-new-irsaliye-no">İrsaliye No</label>
+            <input type="text" id="edit-sale-new-irsaliye-no" placeholder="Örn: IRS-456">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group col-4">
+            <label for="edit-sale-new-unit-type">Miktar Birimi</label>
+            <select id="edit-sale-new-unit-type">
+              <option value="TORBA" selected>TORBA</option>
+              <option value="KG">KG</option>
+              <option value="TON">TON</option>
+              <option value="M2">M2</option>
+            </select>
+          </div>
+          <div class="form-group col-4">
+            <label for="edit-sale-new-qty">Miktar</label>
+            <input type="text" id="edit-sale-new-qty" value="1">
+          </div>
+          <div class="form-group col-4">
+            <label for="edit-sale-new-bag-weight">Torba Ağırlığı (kg)</label>
+            <input type="text" id="edit-sale-new-bag-weight" value="50">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group col-6 manager-only hidden">
+            <label for="edit-sale-new-purchase-price">Alış Fiyatı (Opsiyonel)</label>
+            <input type="text" id="edit-sale-new-purchase-price" placeholder="0.00">
+          </div>
+          <div class="form-group col-6 manager-only hidden">
+            <label for="edit-sale-new-purchase-price-type">Alış Fiyat Birimi</label>
+            <select id="edit-sale-new-purchase-price-type">
+              <option value="TORBA" selected>TORBA</option>
+              <option value="KG">KG</option>
+              <option value="TON">TON</option>
+              <option value="M2">M2</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group col-6">
+            <label for="edit-sale-new-base-price">Baz Satış Fiyatı (*)</label>
+            <input type="text" id="edit-sale-new-base-price" placeholder="0.00">
+          </div>
+          <div class="form-group col-6">
+            <label for="edit-sale-new-base-price-type">Satış Fiyat Birimi</label>
+            <select id="edit-sale-new-base-price-type">
+              <option value="TON" selected>TON</option>
+              <option value="TORBA">TORBA</option>
+              <option value="KG">KG</option>
+              <option value="M2">M2</option>
+            </select>
+          </div>
+        </div>
+
+        <button id="btn-edit-sale-add-product" class="btn btn-secondary btn-block" style="margin-top: 5px;">➕ Ürünü Listeye Ekle</button>
+      </div>
+
+      <!-- Pricing Summary box -->
       <div style="margin-top: 15px; padding: 10px; border-radius: 6px; background-color: rgba(108, 92, 231, 0.05); border: 1px dashed var(--primary-color);">
-        <div class="flex-row justify-between" style="font-size: 0.85rem; margin-bottom: 5px;">
-          <span>Yeni Baz Birim Fiyatı:</span>
-          <strong id="edit-sale-lbl-base-unit-price">0,00 ₺</strong>
-        </div>
-        <div class="flex-row justify-between" style="font-size: 0.85rem; margin-bottom: 5px;">
-          <span>Yeni Nihai Birim Fiyatı (Vade/Ek Dahil):</span>
-          <strong id="edit-sale-lbl-unit-price">0,00 ₺</strong>
-        </div>
         <div class="flex-row justify-between" style="font-size: 0.85rem; margin-bottom: 5px;">
           <span>Yeni Toplam Tutar:</span>
           <strong id="edit-sale-lbl-total-price">0,00 ₺</strong>
         </div>
-        <div class="flex-row justify-between manager-only" style="font-size: 0.85rem;">
+        <div class="flex-row justify-between manager-only hidden" style="font-size: 0.85rem;">
           <span>Yeni Tahmini Kâr:</span>
           <strong id="edit-sale-lbl-profit">0,00 ₺</strong>
         </div>

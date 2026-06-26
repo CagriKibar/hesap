@@ -410,8 +410,35 @@ ipcMain.handle('get-sales', async () => {
   } else {
     recalculateAndHealSalesProfits();
     const rows = db.execQuery("SELECT * FROM satislar ORDER BY id DESC");
+    const allProducts = db.execQuery("SELECT * FROM satis_urunleri");
+    const productsBySaleId = {};
+    allProducts.forEach(p => {
+      if (!productsBySaleId[p.satis_id]) {
+        productsBySaleId[p.satis_id] = [];
+      }
+      productsBySaleId[p.satis_id].push(p);
+    });
+
     return rows.map(r => {
       const kar_orani = calculateProfitMarginPct(r);
+      const urunler = productsBySaleId[r.id] || [{
+        id: null,
+        satis_id: r.id,
+        urun_adi: r.urun_adi,
+        miktar: r.miktar,
+        birim: r.birim,
+        fiyat_birimi: r.fiyat_birimi,
+        torba_agirligi: r.torba_agirligi,
+        alis_fiyati: r.alis_fiyati,
+        baz_satis_fiyati: r.baz_satis_fiyati,
+        alis_birimi: r.alis_birimi,
+        birim_fiyat: r.birim_fiyat,
+        toplam_tutar: r.toplam_tutar,
+        kar: r.kar,
+        irsaliye_no: r.irsaliye_no,
+        irsaliye_yolu: r.irsaliye_yolu
+      }];
+
       return {
         id: r.id,
         tarih: r.tarih,
@@ -429,7 +456,8 @@ ipcMain.handle('get-sales', async () => {
         fatura_yolu: r.fatura_yolu,
         teslim_durumu: r.teslim_durumu,
         teslim_yeri: r.teslim_yeri,
-        teslim_notu: r.teslim_notu
+        teslim_notu: r.teslim_notu,
+        urunler: urunler
       };
     });
   }
@@ -441,6 +469,37 @@ ipcMain.handle('add-sale', async (event, saleData) => {
   if (cfg.mod === 'istemci') {
     return await apiCall('post', '/api/satislar', saleData);
   } else {
+    const urunler = saleData.urunler || [];
+    let summaryUrunAdi = saleData.urun_adi || '';
+    let summaryMiktar = saleData.miktar || 0;
+    let summaryBirim = saleData.birim || 'TORBA';
+    let summaryFiyatBirimi = saleData.fiyat_birimi || 'TON';
+    let summaryTorbaAgirligi = saleData.torba_agirligi || 50.0;
+    let summaryAlisFiyati = saleData.alis_fiyati || 0.0;
+    let summaryAlisBirimi = saleData.alis_birimi || '';
+    let summaryBazSatisFiyati = saleData.baz_satis_fiyati || 0.0;
+    let summaryBirimFiyat = saleData.birim_fiyat || 0.0;
+    let summaryToplamTutar = saleData.toplam_tutar || 0.0;
+    let summaryKar = saleData.kar || 0.0;
+    let summaryIrsaliyeNo = saleData.irsaliye_no || '';
+    let summaryIrsaliyeYolu = saleData.irsaliye_yolu || '';
+
+    if (urunler.length > 0) {
+      summaryUrunAdi = urunler.map(u => u.urun_adi).join(', ');
+      summaryMiktar = urunler.reduce((sum, u) => sum + (u.miktar || 0), 0);
+      summaryBirim = urunler[0].birim || 'TORBA';
+      summaryFiyatBirimi = urunler[0].fiyat_birimi || 'TON';
+      summaryTorbaAgirligi = urunler[0].torba_agirligi || 50.0;
+      summaryAlisFiyati = urunler[0].alis_fiyati || 0.0;
+      summaryAlisBirimi = urunler[0].alis_birimi || '';
+      summaryBazSatisFiyati = urunler[0].baz_satis_fiyati || 0.0;
+      summaryBirimFiyat = urunler[0].birim_fiyat || 0.0;
+      summaryToplamTutar = urunler.reduce((sum, u) => sum + (u.toplam_tutar || 0), 0);
+      summaryKar = urunler.reduce((sum, u) => sum + (u.kar || 0), 0);
+      summaryIrsaliyeNo = urunler.map(u => u.irsaliye_no).filter(n => n).join(', ');
+      summaryIrsaliyeYolu = urunler.map(u => u.irsaliye_yolu).filter(y => y).join(', ');
+    }
+
     const lastId = db.execInsert(`
       INSERT INTO satislar (
         tarih, kullanici, musteri_adi, urun_adi, miktar, birim, fiyat_birimi, torba_agirligi,
@@ -450,18 +509,48 @@ ipcMain.handle('add-sale', async (event, saleData) => {
         fatura_no, irsaliye_no, fatura_yolu, teslim_durumu, teslim_yeri, teslim_notu
       ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     `, [
-      saleData.tarih, saleData.kullanici, saleData.musteri_adi, saleData.urun_adi,
-      saleData.miktar, saleData.birim, saleData.fiyat_birimi, saleData.torba_agirligi,
-      saleData.alis_fiyati, saleData.baz_satis_fiyati, saleData.odeme_turu,
+      saleData.tarih, saleData.kullanici, saleData.musteri_adi, summaryUrunAdi,
+      summaryMiktar, summaryBirim, summaryFiyatBirimi, summaryTorbaAgirligi,
+      summaryAlisFiyati, summaryBazSatisFiyati, saleData.odeme_turu,
       saleData.vade_ay, saleData.vade_orani,
-      saleData.birim_fiyat, saleData.toplam_tutar, saleData.kar,
-      saleData.irsaliye_yolu || '',
+      summaryBirimFiyat, summaryToplamTutar, summaryKar,
+      summaryIrsaliyeYolu,
       saleData.nakliye_dahil || 0, saleData.nakliye_maliyeti || 0.0,
       saleData.indirme_dahil || 0, saleData.indirme_maliyeti || 0.0,
-      saleData.alis_birimi || '',
-      saleData.fatura_no || '', saleData.irsaliye_no || '', saleData.fatura_yolu || '',
+      summaryAlisBirimi,
+      saleData.fatura_no || '', summaryIrsaliyeNo || '', saleData.fatura_yolu || '',
       saleData.teslim_durumu || 0, saleData.teslim_yeri || '', saleData.teslim_notu || ''
     ]);
+
+    if (urunler.length > 0) {
+      for (const u of urunler) {
+        db.execInsert(`
+          INSERT INTO satis_urunleri (
+            satis_id, urun_adi, miktar, birim, fiyat_birimi, torba_agirligi,
+            alis_fiyati, baz_satis_fiyati, alis_birimi, birim_fiyat, toplam_tutar, kar,
+            irsaliye_no, irsaliye_yolu
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+          lastId, u.urun_adi, u.miktar, u.birim, u.fiyat_birimi, u.torba_agirligi || 50.0,
+          u.alis_fiyati || 0, u.baz_satis_fiyati || 0, u.alis_birimi || '',
+          u.birim_fiyat || 0, u.toplam_tutar || 0, u.kar || 0,
+          u.irsaliye_no || '', u.irsaliye_yolu || ''
+        ]);
+      }
+    } else {
+      db.execInsert(`
+        INSERT INTO satis_urunleri (
+          satis_id, urun_adi, miktar, birim, fiyat_birimi, torba_agirligi,
+          alis_fiyati, baz_satis_fiyati, alis_birimi, birim_fiyat, toplam_tutar, kar,
+          irsaliye_no, irsaliye_yolu
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        lastId, summaryUrunAdi, summaryMiktar, summaryBirim, summaryFiyatBirimi, summaryTorbaAgirligi,
+        summaryAlisFiyati, summaryBazSatisFiyati, summaryAlisBirimi, summaryBirimFiyat, summaryToplamTutar, summaryKar,
+        summaryIrsaliyeNo, summaryIrsaliyeYolu
+      ]);
+    }
+
     return { id: lastId };
   }
 });
@@ -472,6 +561,35 @@ ipcMain.handle('edit-sale', async (event, { sid, saleData }) => {
   if (cfg.mod === 'istemci') {
     return await apiCall('put', `/api/satislar/${sid}`, saleData);
   } else {
+    const urunler = saleData.urunler || [];
+    let summaryUrunAdi = saleData.urun_adi;
+    let summaryMiktar = saleData.miktar;
+    let summaryBirim = saleData.birim;
+    let summaryFiyatBirimi = saleData.fiyat_birimi;
+    let summaryTorbaAgirligi = saleData.torba_agirligi;
+    let summaryAlisFiyati = saleData.alis_fiyati;
+    let summaryAlisBirimi = saleData.alis_birimi;
+    let summaryBazSatisFiyati = saleData.baz_satis_fiyati;
+    let summaryBirimFiyat = saleData.birim_fiyat;
+    let summaryToplamTutar = saleData.toplam_tutar;
+    let summaryKar = saleData.kar;
+    let summaryIrsaliyeNo = saleData.irsaliye_no;
+
+    if (urunler.length > 0) {
+      summaryUrunAdi = urunler.map(u => u.urun_adi).join(', ');
+      summaryMiktar = urunler.reduce((sum, u) => sum + (u.miktar || 0), 0);
+      summaryBirim = urunler[0].birim;
+      summaryFiyatBirimi = urunler[0].fiyat_birimi;
+      summaryTorbaAgirligi = urunler[0].torba_agirligi;
+      summaryAlisFiyati = urunler[0].alis_fiyati;
+      summaryAlisBirimi = urunler[0].alis_birimi;
+      summaryBazSatisFiyati = urunler[0].baz_satis_fiyati;
+      summaryBirimFiyat = urunler[0].birim_fiyat;
+      summaryToplamTutar = urunler.reduce((sum, u) => sum + (u.toplam_tutar || 0), 0);
+      summaryKar = urunler.reduce((sum, u) => sum + (u.kar || 0), 0);
+      summaryIrsaliyeNo = urunler.map(u => u.irsaliye_no).filter(n => n).join(', ');
+    }
+
     db.execRun(`
       UPDATE satislar SET
         tarih=?, musteri_adi=?, urun_adi=?, miktar=?, birim=?, fiyat_birimi=?, torba_agirligi=?,
@@ -481,17 +599,49 @@ ipcMain.handle('edit-sale', async (event, { sid, saleData }) => {
         fatura_no=?, irsaliye_no=?
       WHERE id=?
     `, [
-      saleData.tarih, saleData.musteri_adi, saleData.urun_adi,
-      saleData.miktar, saleData.birim, saleData.fiyat_birimi, saleData.torba_agirligi,
-      saleData.alis_fiyati, saleData.baz_satis_fiyati, saleData.odeme_turu,
+      saleData.tarih, saleData.musteri_adi, summaryUrunAdi,
+      summaryMiktar, summaryBirim, summaryFiyatBirimi, summaryTorbaAgirligi,
+      summaryAlisFiyati, summaryBazSatisFiyati, saleData.odeme_turu,
       saleData.vade_ay, saleData.vade_orani,
-      saleData.birim_fiyat, saleData.toplam_tutar, saleData.kar,
+      summaryBirimFiyat, summaryToplamTutar, summaryKar,
       saleData.nakliye_dahil || 0, saleData.nakliye_maliyeti || 0.0,
       saleData.indirme_dahil || 0, saleData.indirme_maliyeti || 0.0,
-      saleData.alis_birimi || '',
-      saleData.fatura_no || '', saleData.irsaliye_no || '',
+      summaryAlisBirimi,
+      saleData.fatura_no || '', summaryIrsaliyeNo || '',
       sid
     ]);
+
+    // Update products table
+    db.execRun("DELETE FROM satis_urunleri WHERE satis_id=?", [sid]);
+    if (urunler.length > 0) {
+      for (const u of urunler) {
+        db.execInsert(`
+          INSERT INTO satis_urunleri (
+            satis_id, urun_adi, miktar, birim, fiyat_birimi, torba_agirligi,
+            alis_fiyati, baz_satis_fiyati, alis_birimi, birim_fiyat, toplam_tutar, kar,
+            irsaliye_no, irsaliye_yolu
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+          sid, u.urun_adi, u.miktar, u.birim, u.fiyat_birimi, u.torba_agirligi || 50.0,
+          u.alis_fiyati || 0, u.baz_satis_fiyati || 0, u.alis_birimi || '',
+          u.birim_fiyat || 0, u.toplam_tutar || 0, u.kar || 0,
+          u.irsaliye_no || '', u.irsaliye_yolu || ''
+        ]);
+      }
+    } else {
+      db.execInsert(`
+        INSERT INTO satis_urunleri (
+          satis_id, urun_adi, miktar, birim, fiyat_birimi, torba_agirligi,
+          alis_fiyati, baz_satis_fiyati, alis_birimi, birim_fiyat, toplam_tutar, kar,
+          irsaliye_no, irsaliye_yolu
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        sid, summaryUrunAdi, summaryMiktar, summaryBirim, summaryFiyatBirimi, summaryTorbaAgirligi,
+        summaryAlisFiyati, summaryBazSatisFiyati, summaryAlisBirimi, summaryBirimFiyat, summaryToplamTutar, summaryKar,
+        summaryIrsaliyeNo, ''
+      ]);
+    }
+
     return { ok: true };
   }
 });
@@ -506,6 +656,27 @@ ipcMain.handle('get-sale-details', async (event, saleId) => {
     if (rows.length === 0) throw new Error("Satış bulunamadı.");
     const r = rows[0];
     r.kar_orani = calculateProfitMarginPct(r);
+    
+    // Fetch products
+    const products = db.execQuery("SELECT * FROM satis_urunleri WHERE satis_id=?", [saleId]);
+    r.urunler = products.length > 0 ? products : [{
+      id: null,
+      satis_id: r.id,
+      urun_adi: r.urun_adi,
+      miktar: r.miktar,
+      birim: r.birim,
+      fiyat_birimi: r.fiyat_birimi,
+      torba_agirligi: r.torba_agirligi,
+      alis_fiyati: r.alis_fiyati,
+      baz_satis_fiyati: r.baz_satis_fiyati,
+      alis_birimi: r.alis_birimi,
+      birim_fiyat: r.birim_fiyat,
+      toplam_tutar: r.toplam_tutar,
+      kar: r.kar,
+      irsaliye_no: r.irsaliye_no,
+      irsaliye_yolu: r.irsaliye_yolu
+    }];
+
     return r;
   }
 });
@@ -516,13 +687,14 @@ ipcMain.handle('delete-sale', async (event, saleId) => {
   if (cfg.mod === 'istemci') {
     return await apiCall('delete', `/api/satislar/${saleId}`);
   } else {
+    db.execRun("DELETE FROM satis_urunleri WHERE satis_id=?", [saleId]);
     db.execRun("DELETE FROM satislar WHERE id=?", [saleId]);
     return { ok: true };
   }
 });
 
 // Upload Waybill
-ipcMain.handle('upload-waybill', async (event, saleId) => {
+ipcMain.handle('upload-waybill', async (event, { saleId, urunId }) => {
   const cfg = loadConfigSync();
   
   // Show file dialog
@@ -541,7 +713,7 @@ ipcMain.handle('upload-waybill', async (event, saleId) => {
 
   const sourcePath = result.filePaths[0];
   const ext = path.extname(sourcePath);
-  const destFileName = `irsaliye_${saleId}${ext}`;
+  const destFileName = `irsaliye_${saleId}_${urunId || 'summary'}${ext}`;
   
   // Determine waybill folder location relative to DB folder or cwd
   let irsFolder = path.join(userDataPath, 'irsaliyeler');
@@ -558,35 +730,54 @@ ipcMain.handle('upload-waybill', async (event, saleId) => {
 
   // Update DB pathway
   if (cfg.mod === 'istemci') {
-    await apiCall('put', `/api/satislar/${saleId}/irsaliye`, { yol: destPath });
+    await apiCall('put', `/api/satislar/${saleId}/irsaliye`, { yol: destPath, urun_id: urunId });
   } else {
-    db.execRun("UPDATE satislar SET irsaliye_yolu=? WHERE id=?", [destPath, saleId]);
+    if (urunId) {
+      db.execRun("UPDATE satis_urunleri SET irsaliye_yolu=? WHERE id=?", [destPath, urunId]);
+      const products = db.execQuery("SELECT irsaliye_yolu FROM satis_urunleri WHERE satis_id=?", [saleId]);
+      const joinedPaths = products.map(p => p.irsaliye_yolu).filter(y => y).join(', ');
+      db.execRun("UPDATE satislar SET irsaliye_yolu=? WHERE id=?", [joinedPaths, saleId]);
+    } else {
+      db.execRun("UPDATE satislar SET irsaliye_yolu=? WHERE id=?", [destPath, saleId]);
+      db.execRun("UPDATE satis_urunleri SET irsaliye_yolu=? WHERE satis_id=?", [destPath, saleId]);
+    }
   }
 
   return destPath;
 });
 
 // View Waybill
-ipcMain.handle('view-waybill', async (event, saleId) => {
-  let sale = null;
+ipcMain.handle('view-waybill', async (event, { saleId, urunId }) => {
+  let pathStr = '';
   const cfg = loadConfigSync();
   
   if (cfg.mod === 'istemci') {
-    sale = await apiCall('get', `/api/satislar/${saleId}`);
-  } else {
-    const rows = db.execQuery("SELECT irsaliye_yolu FROM satislar WHERE id=?", [saleId]);
-    sale = rows[0];
-  }
-
-  if (sale && sale.irsaliye_yolu) {
-    if (fs.existsSync(sale.irsaliye_yolu)) {
-      shell.openPath(sale.irsaliye_yolu);
-      return { ok: true };
+    const sale = await apiCall('get', `/api/satislar/${saleId}`);
+    if (urunId) {
+      const prod = (sale.urunler || []).find(p => p.id === urunId);
+      pathStr = prod ? prod.irsaliye_yolu : '';
     } else {
-      throw new Error(`İrsaliye dosyası bulunamadı:\n${sale.irsaliye_yolu}`);
+      pathStr = sale.irsaliye_yolu;
     }
   } else {
-    throw new Error("Bu satış kaydına ait bir irsaliye yüklenmemiş.");
+    if (urunId) {
+      const rows = db.execQuery("SELECT irsaliye_yolu FROM satis_urunleri WHERE id=?", [urunId]);
+      pathStr = rows.length > 0 ? rows[0].irsaliye_yolu : '';
+    } else {
+      const rows = db.execQuery("SELECT irsaliye_yolu FROM satislar WHERE id=?", [saleId]);
+      pathStr = rows.length > 0 ? rows[0].irsaliye_yolu : '';
+    }
+  }
+
+  if (pathStr) {
+    if (fs.existsSync(pathStr)) {
+      shell.openPath(pathStr);
+      return { ok: true };
+    } else {
+      throw new Error(`İrsaliye dosyası bulunamadı:\n${pathStr}`);
+    }
+  } else {
+    throw new Error("Bu ürün veya satış kaydına ait bir irsaliye yüklenmemiş.");
   }
 });
 
@@ -1577,6 +1768,8 @@ ipcMain.handle('export-detail-pdf', async (event, saleId) => {
   } else {
     const rows = db.execQuery("SELECT * FROM satislar WHERE id=?", [saleId]);
     sale = rows[0];
+    const products = db.execQuery("SELECT * FROM satis_urunleri WHERE satis_id=?", [saleId]);
+    sale.urunler = products;
   }
 
   const saveResult = await dialog.showSaveDialog(mainWindow, {
@@ -1601,6 +1794,8 @@ ipcMain.handle('export-detail-excel', async (event, saleId) => {
   } else {
     const rows = db.execQuery("SELECT * FROM satislar WHERE id=?", [saleId]);
     sale = rows[0];
+    const products = db.execQuery("SELECT * FROM satis_urunleri WHERE satis_id=?", [saleId]);
+    sale.urunler = products;
   }
 
   const saveResult = await dialog.showSaveDialog(mainWindow, {
@@ -1616,7 +1811,7 @@ ipcMain.handle('export-detail-excel', async (event, saleId) => {
     const sheet = workbook.addWorksheet('Sipariş Detayı');
 
     // Title Row
-    sheet.mergeCells('A1:C1');
+    sheet.mergeCells('A1:E1');
     const titleCell = sheet.getCell('A1');
     titleCell.value = `HAUSMART - SİPARİŞ DETAYI (ID: ${saleId})`;
     titleCell.font = { bold: true, size: 13, color: { argb: '000000' } };
@@ -1626,7 +1821,14 @@ ipcMain.handle('export-detail-excel', async (event, saleId) => {
 
     const baseUnitPrice = getSaleBaseUnitPrice(sale);
     const qty = sale.miktar || 1.0;
-    const netProductTotal = baseUnitPrice * qty;
+    
+    let netProductTotal = 0;
+    if (sale.urunler && sale.urunler.length > 0) {
+      netProductTotal = sale.urunler.reduce((sum, u) => sum + ((u.birim_fiyat || getSaleBaseUnitPrice(u)) * (u.miktar || 0)), 0);
+    } else {
+      netProductTotal = baseUnitPrice * qty;
+    }
+
     const nakliyeBedeli = (sale.nakliye_dahil === 1) ? (sale.nakliye_maliyeti || 0) : 0;
     const indirmeBedeli = (sale.indirme_dahil === 1) ? (sale.indirme_maliyeti || 0) : 0;
     const totalWithoutVade = netProductTotal + nakliyeBedeli + indirmeBedeli;
@@ -1636,30 +1838,10 @@ ipcMain.handle('export-detail-excel', async (event, saleId) => {
       ['Satış Tarihi', sale.tarih],
       ['Satışı Yapan', sale.kullanici],
       ['Müşteri', sale.musteri_adi || '-'],
-      ['Ürün Adı / Kodu', sale.urun_adi || '-'],
-      ['Miktar', `${sale.miktar} ${sale.birim}`],
-      ['Satış Fiyat Birimi', sale.fiyat_birimi],
-      ['Torba Ağırlığı (kg)', (sale.birim === 'TORBA' || sale.fiyat_birimi === 'TORBA') ? sale.torba_agirligi : '-'],
       ['Ödeme Türü', sale.odeme_turu],
       ['Vade (Ay)', sale.vade_ay],
       ['Aylık Vade Oranı (%)', `${sale.vade_orani}%`],
-      ['Baz Satış Fiyatı (₺)', sale.baz_satis_fiyati],
-      ['Birim Satış Fiyatı (Net) (₺)', baseUnitPrice],
-      ['Net Ürün Bedeli (₺)', netProductTotal],
-      ['Nakliye Bedeli (₺)', nakliyeBedeli],
-      ['İndirme Bedeli (₺)', indirmeBedeli],
-      ['Vade / Ödeme Farkı (₺)', vadeFarki],
-      ['Toplam Tutar (₺)', sale.toplam_tutar]
     ];
-
-    // Admin fields
-    const sessionConfig = loadConfigSync();
-    // Assuming UI filters admin fields appropriately before display or we just let it export based on role stored in client
-    // Since IPC doesn't naturally hold session state here, we can export profit if it was calculated and exists in the sale data
-    if (sale.alis_fiyati !== undefined && sale.alis_fiyati > 0) {
-      fields.push(['Alış Fiyatı (₺)', sale.alis_fiyati]);
-      fields.push(['Toplam Kâr (₺)', sale.kar]);
-    }
 
     fields.forEach((row, index) => {
       const r = sheet.getRow(index + 2);
@@ -1668,23 +1850,87 @@ ipcMain.handle('export-detail-excel', async (event, saleId) => {
       r.getCell(1).font = { bold: true };
       r.getCell(2).value = row[1];
       
-      if (typeof row[1] === 'number') {
-        r.getCell(2).numFmt = '#,##0.00';
-      }
-
-      // Zebra striping
       if (index % 2 === 0) {
         r.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'F0F0F0' } };
         r.getCell(2).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'F0F0F0' } };
       }
     });
 
-    sheet.column_dimensions = {
-      A: { width: 28 },
-      B: { width: 22 }
-    };
+    // Write products table
+    let currentRowNum = fields.length + 4;
+    sheet.getRow(currentRowNum).getCell(1).value = "ÜRÜNLER";
+    sheet.getRow(currentRowNum).getCell(1).font = { bold: true, size: 11 };
+    currentRowNum++;
+
+    const headers = ["Ürün Adı", "Miktar", "Birim", "Birim Fiyatı (Baz)", "Toplam Tutar"];
+    const headerRow = sheet.getRow(currentRowNum);
+    headerRow.height = 22;
+    headers.forEach((h, idx) => {
+      const cell = headerRow.getCell(idx + 1);
+      cell.value = h;
+      cell.font = { bold: true };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'E0E0E0' } };
+    });
+    currentRowNum++;
+
+    const urunler = sale.urunler || [{
+      urun_adi: sale.urun_adi,
+      miktar: sale.miktar,
+      birim: sale.birim,
+      birim_fiyat: baseUnitPrice,
+      toplam_tutar: netProductTotal
+    }];
+
+    urunler.forEach((u, idx) => {
+      const r = sheet.getRow(currentRowNum);
+      r.height = 20;
+      r.getCell(1).value = u.urun_adi;
+      r.getCell(2).value = Number(u.miktar || 0);
+      r.getCell(3).value = u.birim;
+      r.getCell(4).value = Number(u.birim_fiyat || getSaleBaseUnitPrice(u) || 0);
+      r.getCell(5).value = Number(u.toplam_tutar || 0);
+
+      r.getCell(2).numFmt = '#,##0.00';
+      r.getCell(4).numFmt = '#,##0.00';
+      r.getCell(5).numFmt = '#,##0.00';
+
+      if (idx % 2 === 1) {
+        for (let col = 1; col <= 5; col++) {
+          r.getCell(col).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'F9F9F9' } };
+        }
+      }
+      currentRowNum++;
+    });
+
+    // Write totals
+    currentRowNum++;
+    const totalFields = [
+      ['Net Ürün Bedeli (₺)', netProductTotal],
+      ['Nakliye Bedeli (₺)', nakliyeBedeli],
+      ['İndirme Bedeli (₺)', indirmeBedeli],
+      ['Vade / Ödeme Farkı (₺)', vadeFarki],
+      ['Toplam Tutar (₺)', sale.toplam_tutar]
+    ];
+    if (sale.alis_fiyati !== undefined && sale.alis_fiyati > 0) {
+      totalFields.push(['Alış Fiyatı (₺)', sale.alis_fiyati]);
+      totalFields.push(['Toplam Kâr (₺)', sale.kar]);
+    }
+
+    totalFields.forEach((row, idx) => {
+      const r = sheet.getRow(currentRowNum);
+      r.height = 20;
+      r.getCell(1).value = row[0];
+      r.getCell(1).font = { bold: true };
+      r.getCell(2).value = Number(row[1]);
+      r.getCell(2).numFmt = '#,##0.00';
+      currentRowNum++;
+    });
+
     sheet.getColumn(1).width = 28;
     sheet.getColumn(2).width = 22;
+    sheet.getColumn(3).width = 12;
+    sheet.getColumn(4).width = 22;
+    sheet.getColumn(5).width = 22;
 
     await workbook.xlsx.writeFile(saveResult.filePath);
     return saveResult.filePath;
@@ -1745,30 +1991,46 @@ function generatePdfSlip(filePath, sale) {
     doc.text("BİRİM FİYAT", 490, 196, { width: 60, align: 'right' });
 
     // Rows
-    const baseUnitPrice = getSaleBaseUnitPrice(sale);
+    const urunler = sale.urunler || [];
     doc.font(fonts.regular).fontSize(9);
     let y = 210;
+    
+    const displayItems = urunler.length > 0 ? urunler : [{
+      urun_adi: sale.urun_adi,
+      miktar: sale.miktar,
+      birim: sale.birim,
+      birim_fiyat: getSaleBaseUnitPrice(sale)
+    }];
+
     for (let i = 0; i < 15; i++) {
       if (i % 2 === 0) {
         doc.rect(40, y, 515.28, 20).fill('#F5F5F5');
       }
       doc.fillColor('black');
-      if (i === 0) {
+      if (i < displayItems.length) {
+        const u = displayItems[i];
+        const itemBaseUnitPrice = u.birim_fiyat || getSaleBaseUnitPrice(u) || 0;
         doc.text("-", 45, y + 6);
-        doc.font(fonts.bold).text(sale.urun_adi || "", 130, y + 6).font(fonts.regular);
-        doc.text(String(sale.miktar), 320, y + 6);
+        doc.font(fonts.bold).text(u.urun_adi || "", 130, y + 6).font(fonts.regular);
+        doc.text(String(u.miktar), 320, y + 6);
         doc.text("0,00", 380, y + 6);
-        doc.text(sale.birim || "", 440, y + 6);
-        doc.text(formatMoney(baseUnitPrice), 490, y + 6, { width: 60, align: 'right' });
+        doc.text(u.birim || "", 440, y + 6);
+        doc.text(formatMoney(itemBaseUnitPrice), 490, y + 6, { width: 60, align: 'right' });
       }
       y += 20;
     }
 
     // Totals Breakdown
-    const qty = sale.miktar || 1.0;
-    const netProductTotal = baseUnitPrice * qty;
     const nakliyeBedeli = (sale.nakliye_dahil === 1) ? (sale.nakliye_maliyeti || 0) : 0;
     const indirmeBedeli = (sale.indirme_dahil === 1) ? (sale.indirme_maliyeti || 0) : 0;
+    
+    let netProductTotal = 0;
+    if (sale.urunler && sale.urunler.length > 0) {
+      netProductTotal = sale.urunler.reduce((sum, u) => sum + ((u.birim_fiyat || getSaleBaseUnitPrice(u)) * (u.miktar || 0)), 0);
+    } else {
+      netProductTotal = getSaleBaseUnitPrice(sale) * (sale.miktar || 1.0);
+    }
+
     const totalWithoutVade = netProductTotal + nakliyeBedeli + indirmeBedeli;
     const vadeFarki = Math.max(0, sale.toplam_tutar - totalWithoutVade);
 
@@ -1860,44 +2122,9 @@ function generatePdfDetailReport(filePath, sale) {
       ['Satış Tarihi', sale.tarih],
       ['Satışı Yapan', sale.kullanici],
       ['Müşteri', sale.musteri_adi || '-'],
-      ['Ürün Adı / Kodu', sale.urun_adi || '-'],
-      ['Miktar', `${sale.miktar} ${sale.birim}`],
-      ['Satış Fiyat Birimi', sale.fiyat_birimi]
-    ];
-    if (sale.birim === 'TORBA' || sale.fiyat_birimi === 'TORBA') {
-      fields.push(['Torba Ağırlığı', `${sale.torba_agirligi} kg`]);
-    }
-    const baseUnitPrice = getSaleBaseUnitPrice(sale);
-    const qty = sale.miktar || 1.0;
-    const netProductTotal = baseUnitPrice * qty;
-    const nakliyeBedeli = (sale.nakliye_dahil === 1) ? (sale.nakliye_maliyeti || 0) : 0;
-    const indirmeBedeli = (sale.indirme_dahil === 1) ? (sale.indirme_maliyeti || 0) : 0;
-    const totalWithoutVade = netProductTotal + nakliyeBedeli + indirmeBedeli;
-    const vadeFarki = Math.max(0, sale.toplam_tutar - totalWithoutVade);
-
-    fields.push(
       ['Ödeme Türü', sale.odeme_turu],
-      ['Vade', sale.vade_ay > 0 ? `${sale.vade_ay} Ay (Aylık %${sale.vade_orani})` : 'Nakit / Vadesiz'],
-      ['Baz Satış Fiyatı', `${formatMoney(sale.baz_satis_fiyati)} ₺ (${sale.fiyat_birimi})`],
-      ['Birim Satış Fiyatı (Net)', `${formatMoney(baseUnitPrice)} ₺ / ${sale.birim}`],
-      ['Net Ürün Bedeli', `${formatMoney(netProductTotal)} ₺`]
-    );
-
-    if (nakliyeBedeli > 0) {
-      fields.push(['Nakliye Bedeli', `${formatMoney(nakliyeBedeli)} ₺`]);
-    }
-    if (indirmeBedeli > 0) {
-      fields.push(['İndirme Bedeli', `${formatMoney(indirmeBedeli)} ₺`]);
-    }
-    if (vadeFarki > 0.01) {
-      fields.push(['Vade / Ödeme Farkı', `${formatMoney(vadeFarki)} ₺`]);
-    }
-    fields.push(['Toplam Tutar', `${formatMoney(sale.toplam_tutar)} ₺`]);
-
-    if (sale.alis_fiyati !== undefined && sale.alis_fiyati > 0) {
-      fields.push(['Alış Fiyatı', `${formatMoney(sale.alis_fiyati)} ₺`]);
-      fields.push(['Toplam Kâr', `${formatMoney(sale.kar)} ₺`]);
-    }
+      ['Vade', sale.vade_ay > 0 ? `${sale.vade_ay} Ay (Aylık %${sale.vade_orani})` : 'Nakit / Vadesiz']
+    ];
 
     fields.forEach((row, idx) => {
       y += 22;
@@ -1909,8 +2136,75 @@ function generatePdfDetailReport(filePath, sale) {
       doc.font(fonts.regular).fontSize(10).text(String(row[1]), 250, y + 1);
     });
 
+    // Write products table
+    y += 30;
+    doc.rect(40, y, 515.28, 20).fill('#F8CD24');
+    doc.fillColor('black').font(fonts.bold).fontSize(10);
+    doc.text("ÜRÜNLER", 45, y + 5);
+    doc.text("MİKTAR", 300, y + 5);
+    doc.text("BİRİM FİYAT", 380, y + 5, { width: 80, align: 'right' });
+    doc.text("TOPLAM", 470, y + 5, { width: 80, align: 'right' });
+
+    y += 20;
+    doc.font(fonts.regular).fontSize(9);
+    
+    const urunler = sale.urunler || [{
+      urun_adi: sale.urun_adi,
+      miktar: sale.miktar,
+      birim: sale.birim,
+      birim_fiyat: getSaleBaseUnitPrice(sale),
+      toplam_tutar: sale.toplam_tutar
+    }];
+
+    urunler.forEach((u, idx) => {
+      if (idx % 2 === 1) {
+        doc.rect(40, y - 2, 515.28, 18).fill('#F5F5F5');
+      }
+      doc.fillColor('black');
+      doc.text(u.urun_adi || "", 45, y + 3);
+      doc.text(`${u.miktar} ${u.birim}`, 300, y + 3);
+      doc.text(`${formatMoney(u.birim_fiyat || getSaleBaseUnitPrice(u))} ₺`, 380, y + 3, { width: 80, align: 'right' });
+      doc.text(`${formatMoney(u.toplam_tutar || 0)} ₺`, 470, y + 3, { width: 80, align: 'right' });
+      y += 18;
+    });
+
+    // Cost calculations
+    const nakliyeBedeli = (sale.nakliye_dahil === 1) ? (sale.nakliye_maliyeti || 0) : 0;
+    const indirmeBedeli = (sale.indirme_dahil === 1) ? (sale.indirme_maliyeti || 0) : 0;
+    
+    let netProductTotal = 0;
+    if (sale.urunler && sale.urunler.length > 0) {
+      netProductTotal = sale.urunler.reduce((sum, u) => sum + ((u.birim_fiyat || getSaleBaseUnitPrice(u)) * (u.miktar || 0)), 0);
+    } else {
+      netProductTotal = getSaleBaseUnitPrice(sale) * (sale.miktar || 1.0);
+    }
+
+    const totalWithoutVade = netProductTotal + nakliyeBedeli + indirmeBedeli;
+    const vadeFarki = Math.max(0, sale.toplam_tutar - totalWithoutVade);
+
+    y += 15;
+    doc.font(fonts.bold).fontSize(10);
+    
+    const summaryRows = [
+      ['Net Ürün Bedeli', netProductTotal]
+    ];
+    if (nakliyeBedeli > 0) summaryRows.push(['Nakliye Bedeli', nakliyeBedeli]);
+    if (indirmeBedeli > 0) summaryRows.push(['İndirme Bedeli', indirmeBedeli]);
+    if (vadeFarki > 0.01) summaryRows.push(['Vade / Ödeme Farkı', vadeFarki]);
+    
+    if (sale.alis_fiyati !== undefined && sale.alis_fiyati > 0) {
+      summaryRows.push(['Alış Fiyatı', sale.alis_fiyati]);
+      summaryRows.push(['Toplam Kâr', sale.kar]);
+    }
+
+    summaryRows.forEach((row, idx) => {
+      doc.font(fonts.bold).fontSize(10).text(row[0] + ":", 300, y);
+      doc.font(fonts.regular).text(`${formatMoney(row[1])} ₺`, 435, y, { width: 110, align: 'right' });
+      y += 18;
+    });
+
     // Total display box
-    y += 40;
+    y += 10;
     doc.rect(295, y - 5, 260, 22).fill('#D8D8D8');
     doc.fillColor('black').font(fonts.bold).fontSize(12);
     doc.text("GENEL TOPLAM :", 305, y, { width: 120, align: 'right' });

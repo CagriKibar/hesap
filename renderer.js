@@ -2,6 +2,8 @@
 let currentUser = null;
 let currentRole = null;
 let calculatedData = {};
+let currentSaleProducts = [];
+let editSaleProducts = [];
 let selectedSaleRowId = null;
 let selectedUserRowId = null;
 let paymentRates = {
@@ -333,11 +335,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('btn-export-excel').addEventListener('click', exportPriceAnalysisExcel);
   document.getElementById('btn-export-pdf').addEventListener('click', exportPriceAnalysisPdf);
   document.getElementById('btn-save-sale').addEventListener('click', saveSaleRecord);
+  document.getElementById('btn-add-product-to-list').addEventListener('click', addProductToCurrentList);
   
   // Sales Tab Action Buttons
   document.getElementById('btn-view-sale-detail').addEventListener('click', viewSaleDetail);
   document.getElementById('btn-edit-sale').addEventListener('click', openEditSaleModal);
   document.getElementById('btn-save-edit-sale').addEventListener('click', saveEditSaleRecord);
+  document.getElementById('btn-edit-sale-add-product').addEventListener('click', addProductToEditList);
   setupEditSaleCalculationTraces();
 
   document.getElementById('btn-upload-waybill').addEventListener('click', uploadWaybillFile);
@@ -701,13 +705,6 @@ function setupCalculationTraces() {
     if (e.target.checked) {
       el.removeAttribute('disabled');
     } else {
-      el.setAttribute('disabled', 'true');
-      el.value = '';
-    }
-    runCumulativePriceCalculation();
-  });
-}
-
 function runCumulativePriceCalculation() {
   const qty = getFloatValue('qty', 1.0, 0.0001);
   const basePrice = getFloatValue('base-price', 0.0);
@@ -721,53 +718,12 @@ function runCumulativePriceCalculation() {
   // Toggle Bag Weight field visibility
   const hasTorba = [uQtyType, uPurType, uSelType].includes('TORBA');
   const bagInput = document.getElementById('bag-weight');
-  if (hasTorba) {
-    bagInput.removeAttribute('disabled');
-  } else {
-    bagInput.setAttribute('disabled', 'true');
-  }
-  
-  // Weight mappings
-  const weights = {
-    'KG': 1.0,
-    'TON': 1000.0,
-    'TORBA': bagWeight,
-    'M2': 1.0
-  };
-  
-  // 1. Convert Purchase Price to Quantity Unit
-  let purConversionFactor = 1.0;
-  if (uQtyType !== uPurType && uQtyType !== 'M2' && uPurType !== 'M2') {
-    const wQ = weights[uQtyType] || 1.0;
-    const wPur = weights[uPurType] || 1.0;
-    purConversionFactor = wQ / wPur;
-  }
-  
-  // 2. Convert Selling Price to Quantity Unit
-  let selConversionFactor = 1.0;
-  if (uQtyType !== uSelType && uQtyType !== 'M2' && uSelType !== 'M2') {
-    const wQ = weights[uQtyType] || 1.0;
-    const wSel = weights[uSelType] || 1.0;
-    selConversionFactor = wQ / wSel;
-  }
-  
-  const convertedPurchasePrice = purchasePrice * purConversionFactor;
-  const convertedBasePrice = basePrice * selConversionFactor;
-  
-  // Build conversion display info banner text
-  const banner = document.getElementById('conversion-info-banner');
-  let conversionMsgs = [];
-  if (uQtyType !== uPurType && uQtyType !== 'M2' && uPurType !== 'M2' && purchasePrice > 0) {
-    conversionMsgs.push(`Maliyet Dönüşümü: 1 ${uQtyType} = ${purConversionFactor.toFixed(4)} ${uPurType} (${formatMoney(convertedPurchasePrice)} ₺/${uQtyType})`);
-  }
-  if (uQtyType !== uSelType && uQtyType !== 'M2' && uSelType !== 'M2' && basePrice > 0) {
-    conversionMsgs.push(`Satış Dönüşümü: 1 ${uQtyType} = ${selConversionFactor.toFixed(4)} ${uSelType} (${formatMoney(convertedBasePrice)} ₺/${uQtyType})`);
-  }
-  if (conversionMsgs.length > 0) {
-    banner.innerHTML = conversionMsgs.join('<br>');
-    banner.classList.remove('hidden');
-  } else {
-    banner.classList.add('hidden');
+  if (bagInput) {
+    if (hasTorba) {
+      bagInput.removeAttribute('disabled');
+    } else {
+      bagInput.setAttribute('disabled', 'true');
+    }
   }
   
   // Vade interest Calculations
@@ -782,12 +738,65 @@ function runCumulativePriceCalculation() {
   
   const hasUnloading = document.getElementById('has-unloading').checked;
   const unloadCost = hasUnloading ? getFloatValue('unloading-cost', 0.0) : 0.0;
+
+  let targetProducts = [];
+  if (currentSaleProducts.length === 0) {
+    if (basePrice > 0) {
+      const weights = { 'KG': 1.0, 'TON': 1000.0, 'TORBA': bagWeight, 'M2': 1.0 };
+      let purConversionFactor = 1.0;
+      if (uQtyType !== uPurType && uQtyType !== 'M2' && uPurType !== 'M2') {
+        purConversionFactor = (weights[uQtyType] || 1.0) / (weights[uPurType] || 1.0);
+      }
+      let selConversionFactor = 1.0;
+      if (uQtyType !== uSelType && uQtyType !== 'M2' && uSelType !== 'M2') {
+        selConversionFactor = (weights[uQtyType] || 1.0) / (weights[uSelType] || 1.0);
+      }
+      
+      const convertedPurchasePrice = purchasePrice * purConversionFactor;
+      const convertedBasePrice = basePrice * selConversionFactor;
+      const kar = purchasePrice > 0 ? (convertedBasePrice - convertedPurchasePrice) * qty : 0.0;
+      
+      targetProducts.push({
+        base_subtotal: convertedBasePrice * qty,
+        kar: kar,
+        birim_fiyat: convertedBasePrice,
+        miktar: qty,
+        birim: uQtyType
+      });
+      
+      // Build conversion display info banner text
+      const banner = document.getElementById('conversion-info-banner');
+      let conversionMsgs = [];
+      if (uQtyType !== uPurType && uQtyType !== 'M2' && uPurType !== 'M2' && purchasePrice > 0) {
+        conversionMsgs.push(`Maliyet Dönüşümü: 1 ${uQtyType} = ${purConversionFactor.toFixed(4)} ${uPurType} (${formatMoney(convertedPurchasePrice)} ₺/${uQtyType})`);
+      }
+      if (uQtyType !== uSelType && uQtyType !== 'M2' && uSelType !== 'M2' && basePrice > 0) {
+        conversionMsgs.push(`Satış Dönüşümü: 1 ${uQtyType} = ${selConversionFactor.toFixed(4)} ${uSelType} (${formatMoney(convertedBasePrice)} ₺/${uQtyType})`);
+      }
+      if (conversionMsgs.length > 0) {
+        banner.innerHTML = conversionMsgs.join('<br>');
+        banner.classList.remove('hidden');
+      } else {
+        banner.classList.add('hidden');
+      }
+    } else {
+      document.getElementById('conversion-info-banner').classList.add('hidden');
+    }
+  } else {
+    targetProducts = currentSaleProducts;
+    document.getElementById('conversion-info-banner').classList.add('hidden');
+  }
+
+  // Clear table grid
+  const tableBody = document.querySelector('#analysis-table tbody');
+  tableBody.innerHTML = '';
+  calculatedData = {};
   
-  // Calculate unit extra costs
-  const unitExtraCost = (shipCost + unloadCost) / qty;
-  const unitBasePrice = convertedBasePrice + unitExtraCost;
-  const unitCost = convertedPurchasePrice > 0 ? (convertedPurchasePrice + unitExtraCost) : 0.0;
-  
+  if (targetProducts.length === 0) return;
+
+  const netProductTotal = targetProducts.reduce((sum, p) => sum + p.base_subtotal, 0);
+  const totalProfit = targetProducts.reduce((sum, p) => sum + p.kar, 0);
+
   // Payment Type base rates
   const paymentTypes = [
     { name: 'Nakit', rate: getFloatValue('rate-cash', 0.0) },
@@ -803,28 +812,17 @@ function runCumulativePriceCalculation() {
     paymentRates[p.name] = p.rate;
   });
 
-  console.log(`[Calc] qty=${qty}, basePrice=${basePrice}, purchasePrice=${purchasePrice}, bagWeight=${bagWeight}`);
-  console.log(`[Calc] uQtyType=${uQtyType}, uPurType=${uPurType}, uSelType=${uSelType}`);
-  console.log(`[Calc] purConversionFactor=${purConversionFactor}, selConversionFactor=${selConversionFactor}`);
-  console.log(`[Calc] convertedPurchasePrice=${convertedPurchasePrice}, convertedBasePrice=${convertedBasePrice}`);
-  console.log(`[Calc] totalVadeSurcharge=${totalVadeSurcharge}, shipCost=${shipCost}, unloadCost=${unloadCost}`);
-  console.log(`[Calc] unitExtraCost=${unitExtraCost}, unitBasePrice=${unitBasePrice}, unitCost=${unitCost}`);
-  
-  // Clear table grid
-  const tableBody = document.querySelector('#analysis-table tbody');
-  tableBody.innerHTML = '';
-  calculatedData = {};
-  
-  if (basePrice <= 0) return;
-  
   paymentTypes.forEach(p => {
     const finalAppliedRate = p.name === 'Nakit' ? p.rate : (p.rate + totalVadeSurcharge);
-    const unitFinalPrice = unitBasePrice * (1 + (finalAppliedRate / 100));
-    const totalFinalPrice = unitFinalPrice * qty;
-    const totalProfit = unitCost > 0 ? ((unitBasePrice - unitCost) * qty) : 0.0;
-    const profitMarginPct = (unitCost > 0) ? (totalProfit / (unitCost * qty) * 100) : 0.0;
+    const totalFinalPrice = (netProductTotal + shipCost + unloadCost) * (1 + (finalAppliedRate / 100));
     
-    // Store calculations locally
+    let unitFinalPrice = 0;
+    if (targetProducts.length === 1) {
+      unitFinalPrice = totalFinalPrice / targetProducts[0].miktar;
+    }
+    
+    const profitMarginPct = (netProductTotal - totalProfit > 0) ? (totalProfit / (netProductTotal - totalProfit) * 100) : 0.0;
+    
     calculatedData[p.name] = {
       unit_price: unitFinalPrice,
       total_price: totalFinalPrice,
@@ -834,17 +832,24 @@ function runCumulativePriceCalculation() {
       base_rate: p.rate
     };
     
-    const profitText = purchasePrice > 0 
-      ? `${formatMoney(totalProfit)} ₺ (${profitMarginPct >= 0 ? '+' : ''}${profitMarginPct.toFixed(2)}%)` 
+    const profitText = totalProfit > 0 
+      ? `${formatMoney(totalProfit)} ₺` 
       : '-';
+      
+    const unitPriceText = targetProducts.length === 1 ? `${formatMoney(unitFinalPrice)} ₺` : 'Çoklu Ürün';
       
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${p.name}</td>
       <td>%${p.rate.toFixed(2)}</td>
       <td>%${finalAppliedRate.toFixed(2)}</td>
-      <td>${formatMoney(unitFinalPrice)} ₺</td>
+      <td>${unitPriceText}</td>
       <td>${formatMoney(totalFinalPrice)} ₺</td>
+      <td class="manager-col ${currentRole ? '' : 'hidden'}">${profitText}</td>
+    `;
+    tableBody.appendChild(tr);
+  });
+}ice)} ₺</td>
       <td class="manager-col ${currentUser ? '' : 'hidden'}">${profitText}</td>
     `;
     tableBody.appendChild(tr);
@@ -949,60 +954,267 @@ async function saveSaleRecord() {
     return;
   }
 
-  const pName = document.getElementById('prod-name').value.trim().toUpperCase();
-  if (!pName) {
-    alert('Lütfen Ürün Adı / Kodu giriniz.');
-    return;
+  const hasShipping = document.getElementById('has-shipping').checked;
+  const shipCost = hasShipping ? getFloatValue('shipping-cost', 0.0) : 0.0;
+  const hasUnloading = document.getElementById('has-unloading').checked;
+  const unloadCost = hasUnloading ? getFloatValue('unloading-cost', 0.0) : 0.0;
+
+  const vadeMonths = parseInt(document.getElementById('vade-months').value) || 0;
+  const vadeRate = getFloatValue('vade-rate', 0.0);
+  const totalVadeSurcharge = vadeMonths * vadeRate;
+
+  const currentPayType = selectedType;
+  const baseRate = paymentRates[currentPayType] !== undefined ? paymentRates[currentPayType] : 0.0;
+  const finalAppliedRate = currentPayType === 'Nakit' ? baseRate : (baseRate + totalVadeSurcharge);
+
+  let urunlerForSave = [];
+  
+  if (currentSaleProducts.length === 0) {
+    const pName = document.getElementById('prod-name').value.trim().toUpperCase();
+    if (!pName) {
+      alert('Lütfen Ürün Adı / Kodu giriniz veya Satıştaki Ürünler listesine ürün ekleyiniz.');
+      return;
+    }
+
+    const qty = getFloatValue('qty', 1.0, 0.0001);
+    const unitType = document.getElementById('unit-type').value;
+    const basePriceType = document.getElementById('base-price-type').value;
+    const bagWeight = getFloatValue('bag-weight', 50.0, 0.0001);
+    const purchasePrice = getFloatValue('purchase-price', 0.0);
+    const purchasePriceType = document.getElementById('purchase-price-type').value;
+    const basePrice = getFloatValue('base-price', 0.0);
+    const irsaliyeNo = document.getElementById('irsaliye-no').value.trim();
+
+    const weights = { 'KG': 1.0, 'TON': 1000.0, 'TORBA': bagWeight, 'M2': 1.0 };
+    let purConversionFactor = 1.0;
+    if (unitType !== purchasePriceType && unitType !== 'M2' && purchasePriceType !== 'M2') {
+      purConversionFactor = (weights[unitType] || 1.0) / (weights[purchasePriceType] || 1.0);
+    }
+    let selConversionFactor = 1.0;
+    if (unitType !== basePriceType && unitType !== 'M2' && basePriceType !== 'M2') {
+      selConversionFactor = (weights[unitType] || 1.0) / (weights[basePriceType] || 1.0);
+    }
+
+    const convertedPurchasePrice = purchasePrice * purConversionFactor;
+    const convertedBasePrice = basePrice * selConversionFactor;
+
+    const baseSubtotal = convertedBasePrice * qty;
+    const finalItemTotal = pricing.total_price;
+    const finalItemUnitPrice = qty > 0 ? finalItemTotal / qty : 0.0;
+    const kar = purchasePrice > 0 ? (convertedBasePrice - convertedPurchasePrice) * qty : 0.0;
+
+    urunlerForSave.push({
+      urun_adi: pName,
+      miktar: qty,
+      birim: unitType,
+      fiyat_birimi: basePriceType,
+      torba_agirligi: bagWeight,
+      alis_fiyati: purchasePrice,
+      alis_birimi: purchasePriceType,
+      baz_satis_fiyati: basePrice,
+      birim_fiyat: finalItemUnitPrice,
+      toplam_tutar: finalItemTotal,
+      kar: kar,
+      irsaliye_no: irsaliyeNo,
+      irsaliye_yolu: ''
+    });
+  } else {
+    const netProductTotal = currentSaleProducts.reduce((sum, p) => sum + p.base_subtotal, 0);
+
+    urunlerForSave = currentSaleProducts.map(p => {
+      const shareOfExtra = netProductTotal > 0 ? (p.base_subtotal / netProductTotal) * (shipCost + unloadCost) : 0.0;
+      const finalItemTotal = (p.base_subtotal + shareOfExtra) * (1 + finalAppliedRate / 100);
+      const finalItemUnitPrice = p.miktar > 0 ? finalItemTotal / p.miktar : 0.0;
+
+      return {
+        urun_adi: p.urun_adi,
+        miktar: p.miktar,
+        birim: p.birim,
+        fiyat_birimi: p.fiyat_birimi,
+        torba_agirligi: p.torba_agirligi,
+        alis_fiyati: p.alis_fiyati,
+        alis_birimi: p.alis_birimi,
+        baz_satis_fiyati: p.baz_satis_fiyati,
+        birim_fiyat: finalItemUnitPrice,
+        toplam_tutar: finalItemTotal,
+        kar: p.kar,
+        irsaliye_no: p.irsaliye_no,
+        irsaliye_yolu: p.irsaliye_yolu || ''
+      };
+    });
   }
 
   const saleData = {
     tarih: getFormattedCurrentDateTime(),
     kullanici: currentUser,
     musteri_adi: document.getElementById('cust-name').value.trim().toUpperCase() || '..............',
-    urun_adi: pName,
-    miktar: getFloatValue('qty', 1.0, 0.0001),
-    birim: document.getElementById('unit-type').value,
-    fiyat_birimi: document.getElementById('base-price-type').value,
-    torba_agirligi: getFloatValue('bag-weight', 50.0, 0.0001),
-    alis_fiyati: getFloatValue('purchase-price', 0.0),
-    alis_birimi: document.getElementById('purchase-price-type').value,
-    baz_satis_fiyati: getFloatValue('base-price', 0.0),
+    urun_adi: '',
+    miktar: 0.0,
+    birim: '',
+    fiyat_birimi: '',
+    torba_agirligi: 0.0,
+    alis_fiyati: 0.0,
+    alis_birimi: '',
+    baz_satis_fiyati: 0.0,
     odeme_turu: selectedType,
-    vade_ay: parseInt(document.getElementById('vade-months').value) || 0,
-    vade_orani: getFloatValue('vade-rate', 0.0),
-    birim_fiyat: 0.0, // Will be set below
+    vade_ay: vadeMonths,
+    vade_orani: vadeRate,
+    birim_fiyat: 0.0,
     toplam_tutar: pricing.total_price,
     kar: pricing.profit,
     irsaliye_yolu: '',
-    nakliye_dahil: document.getElementById('has-shipping').checked ? 1 : 0,
-    nakliye_maliyeti: getFloatValue('shipping-cost', 0.0),
-    indirme_dahil: document.getElementById('has-unloading').checked ? 1 : 0,
-    indirme_maliyeti: getFloatValue('unloading-cost', 0.0),
+    nakliye_dahil: hasShipping ? 1 : 0,
+    nakliye_maliyeti: shipCost,
+    indirme_dahil: hasUnloading ? 1 : 0,
+    indirme_maliyeti: unloadCost,
     fatura_no: document.getElementById('fatura-no').value.trim(),
-    irsaliye_no: document.getElementById('irsaliye-no').value.trim(),
+    irsaliye_no: '',
     fatura_yolu: '',
     teslim_durumu: 0,
     teslim_yeri: '',
-    teslim_notu: ''
+    teslim_notu: '',
+    urunler: urunlerForSave
   };
-
-  saleData.birim_fiyat = getSaleBaseUnitPrice(saleData);
 
   try {
     await window.api.addSale(saleData);
     alert('Satış kaydı başarıyla kaydedildi.');
     
-    // Clear invoice/waybill inputs
-    document.getElementById('fatura-no').value = '';
-    document.getElementById('irsaliye-no').value = '';
+    currentSaleProducts = [];
+    renderAddedProductsTable();
     
-    // Refresh tables/lists without clearing the inputs, matching Python behavior
+    document.getElementById('prod-name').value = '';
+    document.getElementById('irsaliye-no').value = '';
+    document.getElementById('qty').value = '1';
+    document.getElementById('purchase-price').value = '';
+    document.getElementById('base-price').value = '';
+    document.getElementById('fatura-no').value = '';
+    
     refreshSalesTable();
     refreshHistoryProducts();
   } catch (err) {
     alert(`Kaydetme sırasında hata oluştu:\n${err.message}`);
   }
 }
+
+function addProductToCurrentList(e) {
+  if (e) e.preventDefault();
+  
+  const prodName = document.getElementById('prod-name').value.trim().toUpperCase();
+  if (!prodName) {
+    alert('Lütfen Ürün Adı / Kodu giriniz.');
+    return;
+  }
+  
+  const qty = getFloatValue('qty', 1.0, 0.0001);
+  if (qty <= 0) {
+    alert('Miktar 0\'dan büyük olmalıdır.');
+    return;
+  }
+  
+  const basePrice = getFloatValue('base-price', 0.0);
+  if (basePrice <= 0) {
+    alert('Baz Satış Fiyatı 0\'dan büyük olmalıdır.');
+    return;
+  }
+  
+  const purchasePrice = getFloatValue('purchase-price', 0.0);
+  const bagWeight = getFloatValue('bag-weight', 50.0, 0.0001);
+  const unitType = document.getElementById('unit-type').value;
+  const purchasePriceType = document.getElementById('purchase-price-type').value;
+  const basePriceType = document.getElementById('base-price-type').value;
+  const irsaliyeNo = document.getElementById('irsaliye-no').value.trim();
+  
+  const weights = {
+    'KG': 1.0,
+    'TON': 1000.0,
+    'TORBA': bagWeight,
+    'M2': 1.0
+  };
+  
+  let purConversionFactor = 1.0;
+  if (unitType !== purchasePriceType && unitType !== 'M2' && purchasePriceType !== 'M2') {
+    purConversionFactor = (weights[unitType] || 1.0) / (weights[purchasePriceType] || 1.0);
+  }
+  
+  let selConversionFactor = 1.0;
+  if (unitType !== basePriceType && unitType !== 'M2' && basePriceType !== 'M2') {
+    selConversionFactor = (weights[unitType] || 1.0) / (weights[basePriceType] || 1.0);
+  }
+  
+  const convertedPurchasePrice = purchasePrice * purConversionFactor;
+  const convertedBasePrice = basePrice * selConversionFactor;
+  
+  const baseSubtotal = convertedBasePrice * qty;
+  const kar = purchasePrice > 0 ? (convertedBasePrice - convertedPurchasePrice) * qty : 0.0;
+  
+  currentSaleProducts.push({
+    urun_adi: prodName,
+    miktar: qty,
+    birim: unitType,
+    fiyat_birimi: basePriceType,
+    torba_agirligi: bagWeight,
+    alis_fiyati: purchasePrice,
+    alis_birimi: purchasePriceType,
+    baz_satis_fiyati: basePrice,
+    birim_fiyat: convertedBasePrice,
+    base_subtotal: baseSubtotal,
+    kar: kar,
+    irsaliye_no: irsaliyeNo,
+    irsaliye_yolu: ''
+  });
+  
+  document.getElementById('prod-name').value = '';
+  document.getElementById('irsaliye-no').value = '';
+  document.getElementById('qty').value = '1';
+  document.getElementById('purchase-price').value = '';
+  document.getElementById('base-price').value = '';
+  
+  renderAddedProductsTable();
+  runCumulativePriceCalculation();
+}
+
+function renderAddedProductsTable() {
+  const tableBody = document.querySelector('#added-products-table tbody');
+  if (!tableBody) return;
+  tableBody.innerHTML = '';
+  
+  if (currentSaleProducts.length === 0) {
+    tableBody.innerHTML = `
+      <tr>
+        <td colspan="7" style="text-align: center; color: var(--text-secondary); padding: 15px;">Henüz ürün eklenmedi. Lütfen alanları doldurup "Ürünü Satışa Ekle" butonuna basın.</td>
+      </tr>
+    `;
+    return;
+  }
+  
+  currentSaleProducts.forEach((p, idx) => {
+    const tr = document.createElement('tr');
+    
+    const purPriceText = p.alis_fiyati > 0 
+      ? `${formatMoney(p.alis_fiyati)} ₺/${p.alis_birimi}` 
+      : '-';
+      
+    tr.innerHTML = `
+      <td>${p.urun_adi}</td>
+      <td>${p.miktar}</td>
+      <td>${p.birim}</td>
+      <td class="manager-col ${currentRole ? '' : 'hidden'}">${purPriceText}</td>
+      <td>${formatMoney(p.baz_satis_fiyati)} ₺/${p.fiyat_birimi}</td>
+      <td>${p.irsaliye_no || '-'}</td>
+      <td style="text-align: center;">
+        <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); removeProductFromList(${idx})">Sil</button>
+      </td>
+    `;
+    tableBody.appendChild(tr);
+  });
+}
+
+window.removeProductFromList = function(idx) {
+  currentSaleProducts.splice(idx, 1);
+  renderAddedProductsTable();
+  runCumulativePriceCalculation();
+};
 
 // ==================== TAB 2: RECENT MOVEMENTS ====================
 async function refreshSalesTable() {
@@ -1075,16 +1287,14 @@ let editingSaleMetadata = {};
 
 function setupEditSaleCalculationTraces() {
   const inputs = [
-    'edit-sale-qty', 'edit-sale-purchase-price', 'edit-sale-base-price', 'edit-sale-vade-rate',
-    'edit-sale-bag-weight', 'edit-sale-shipping-cost', 'edit-sale-unloading-cost',
-    'edit-sale-unit-type', 'edit-sale-purchase-price-type', 'edit-sale-base-price-type',
+    'edit-sale-vade-rate', 'edit-sale-shipping-cost', 'edit-sale-unloading-cost',
     'edit-sale-receipt-type', 'edit-sale-vade-months'
   ];
   
   inputs.forEach(id => {
     const el = document.getElementById(id);
     if (el) {
-      const eventName = el.tagName === 'SELECT' || el.type === 'checkbox' ? 'change' : 'input';
+      const eventName = el.tagName === 'SELECT' ? 'change' : 'input';
       el.addEventListener(eventName, runEditSaleCalculation);
     }
   });
@@ -1114,93 +1324,57 @@ function setupEditSaleCalculationTraces() {
 }
 
 function runEditSaleCalculation() {
-  const qty = getFloatValue('edit-sale-qty', 1.0, 0.0001);
-  const basePrice = getFloatValue('edit-sale-base-price', 0.0);
-  const purchasePrice = getFloatValue('edit-sale-purchase-price', 0.0);
-  const bagWeight = getFloatValue('edit-sale-bag-weight', 50.0, 0.0001);
-  
-  const uQtyType = document.getElementById('edit-sale-unit-type').value;
-  const uPurType = document.getElementById('edit-sale-purchase-price-type').value;
-  const uSelType = document.getElementById('edit-sale-base-price-type').value;
-  
-  // Toggle Bag Weight field visibility
-  const hasTorba = [uQtyType, uPurType, uSelType].includes('TORBA');
-  const bagInput = document.getElementById('edit-sale-bag-weight');
-  if (hasTorba) {
-    bagInput.removeAttribute('disabled');
-  } else {
-    bagInput.setAttribute('disabled', 'true');
-  }
-  
-  // Weight mappings
-  const weights = {
-    'KG': 1.0,
-    'TON': 1000.0,
-    'TORBA': bagWeight,
-    'M2': 1.0
-  };
-  
-  // 1. Convert Purchase Price to Quantity Unit
-  let purConversionFactor = 1.0;
-  if (uQtyType !== uPurType && uQtyType !== 'M2' && uPurType !== 'M2') {
-    const wQ = weights[uQtyType] || 1.0;
-    const wPur = weights[uPurType] || 1.0;
-    purConversionFactor = wQ / wPur;
-  }
-  
-  // 2. Convert Selling Price to Quantity Unit
-  let selConversionFactor = 1.0;
-  if (uQtyType !== uSelType && uQtyType !== 'M2' && uSelType !== 'M2') {
-    const wQ = weights[uQtyType] || 1.0;
-    const wSel = weights[uSelType] || 1.0;
-    selConversionFactor = wQ / wSel;
-  }
-  
-  const convertedPurchasePrice = purchasePrice * purConversionFactor;
-  const convertedBasePrice = basePrice * selConversionFactor;
-  
-  // Vade interest Calculations
-  const vadeMonths = parseInt(document.getElementById('edit-sale-vade-months').value) || 0;
-  const vadeRate = getFloatValue('edit-sale-vade-rate', 0.0);
-  const totalVadeSurcharge = vadeMonths * vadeRate;
-  
-  // Shipping / Unloading values
+  editSaleProducts.forEach(u => {
+    const weights = { 'KG': 1.0, 'TON': 1000.0, 'TORBA': u.torba_agirligi || 50.0, 'M2': 1.0 };
+    
+    let purConversionFactor = 1.0;
+    if (u.birim !== u.alis_birimi && u.birim !== 'M2' && u.alis_birimi !== 'M2') {
+      purConversionFactor = (weights[u.birim] || 1.0) / (weights[u.alis_birimi] || 1.0);
+    }
+    const convertedPurchasePrice = (u.alis_fiyati || 0) * purConversionFactor;
+    
+    let selConversionFactor = 1.0;
+    if (u.birim !== u.fiyat_birimi && u.birim !== 'M2' && u.fiyat_birimi !== 'M2') {
+      selConversionFactor = (weights[u.birim] || 1.0) / (weights[u.fiyat_birimi] || 1.0);
+    }
+    const convertedBasePrice = (u.baz_satis_fiyati || 0) * selConversionFactor;
+    
+    u.birim_fiyat = convertedBasePrice;
+    u.base_subtotal = convertedBasePrice * u.miktar;
+    u.kar = u.alis_fiyati > 0 ? (convertedBasePrice - convertedPurchasePrice) * u.miktar : 0.0;
+  });
+
+  const netProductTotal = editSaleProducts.reduce((sum, u) => sum + u.base_subtotal, 0);
+  const totalProfit = editSaleProducts.reduce((sum, u) => sum + u.kar, 0);
+
   const hasShipping = document.getElementById('edit-sale-has-shipping').checked;
   const shipCost = hasShipping ? getFloatValue('edit-sale-shipping-cost', 0.0) : 0.0;
   
   const hasUnloading = document.getElementById('edit-sale-has-unloading').checked;
   const unloadCost = hasUnloading ? getFloatValue('edit-sale-unloading-cost', 0.0) : 0.0;
   
-  // Calculate unit extra costs
-  const unitExtraCost = (shipCost + unloadCost) / qty;
-  const unitBasePrice = convertedBasePrice + unitExtraCost;
-  const unitCost = convertedPurchasePrice > 0 ? (convertedPurchasePrice + unitExtraCost) : 0.0;
+  const vadeMonths = parseInt(document.getElementById('edit-sale-vade-months').value) || 0;
+  const vadeRate = getFloatValue('edit-sale-vade-rate', 0.0);
+  const totalVadeSurcharge = vadeMonths * vadeRate;
   
-  // Get base rate for current payment type
   const currentPayType = document.getElementById('edit-sale-receipt-type').value;
   const baseRate = paymentRates[currentPayType] !== undefined ? paymentRates[currentPayType] : 0.0;
 
   const finalAppliedRate = currentPayType === 'Nakit' ? baseRate : (baseRate + totalVadeSurcharge);
-  const unitFinalPrice = unitBasePrice * (1 + (finalAppliedRate / 100));
-  const totalFinalPrice = unitFinalPrice * qty;
-  const totalProfit = unitCost > 0 ? ((unitBasePrice - unitCost) * qty) : 0.0;
-  const profitMarginPct = (unitCost > 0) ? (totalProfit / (unitCost * qty) * 100) : 0.0;
+  const totalFinalPrice = (netProductTotal + shipCost + unloadCost) * (1 + (finalAppliedRate / 100));
 
-  // Update DOM labels
-  document.getElementById('edit-sale-lbl-base-unit-price').textContent = `${formatMoney(convertedBasePrice)} ₺`;
-  document.getElementById('edit-sale-lbl-unit-price').textContent = `${formatMoney(unitFinalPrice)} ₺`;
   document.getElementById('edit-sale-lbl-total-price').textContent = `${formatMoney(totalFinalPrice)} ₺`;
   
-  const profitText = purchasePrice > 0 
-    ? `${formatMoney(totalProfit)} ₺ (${profitMarginPct >= 0 ? '+' : ''}${profitMarginPct.toFixed(2)}%)` 
+  const profitText = totalProfit > 0 
+    ? `${formatMoney(totalProfit)} ₺` 
     : '-';
   document.getElementById('edit-sale-lbl-profit').textContent = profitText;
 
   return {
-    convertedBasePrice,
-    unitFinalPrice,
+    netProductTotal,
     totalFinalPrice,
-    totalProfit
+    totalProfit,
+    finalAppliedRate
   };
 }
 
@@ -1222,24 +1396,11 @@ async function openEditSaleModal() {
     document.getElementById('edit-sale-title').textContent = `Satış Kaydını Düzenle - ID: ${sale.id}`;
     document.getElementById('edit-sale-id').value = sale.id;
     document.getElementById('edit-sale-cust-name').value = sale.musteri_adi || '';
-    document.getElementById('edit-sale-prod-name').value = sale.urun_adi || '';
-    document.getElementById('edit-sale-qty').value = sale.miktar || 1;
-    document.getElementById('edit-sale-unit-type').value = sale.birim || 'TORBA';
-    document.getElementById('edit-sale-bag-weight').value = sale.torba_agirligi || 50;
-    
-    document.getElementById('edit-sale-purchase-price').value = sale.alis_fiyati || '';
-    document.getElementById('edit-sale-purchase-price-type').value = sale.alis_birimi || sale.birim || 'TORBA';
-    
-    document.getElementById('edit-sale-base-price').value = sale.baz_satis_fiyati || '';
-    document.getElementById('edit-sale-base-price-type').value = sale.fiyat_birimi || 'TON';
+    document.getElementById('edit-sale-fatura-no').value = sale.fatura_no || '';
     
     document.getElementById('edit-sale-receipt-type').value = sale.odeme_turu || 'Nakit';
     document.getElementById('edit-sale-vade-months').value = sale.vade_ay || 0;
     document.getElementById('edit-sale-vade-rate').value = sale.vade_orani || 0;
-    
-    document.getElementById('edit-sale-waybill-path').value = sale.irsaliye_yolu ? 'Yüklendi' : 'Yüklenmedi';
-    document.getElementById('edit-sale-fatura-no').value = sale.fatura_no || '';
-    document.getElementById('edit-sale-irsaliye-no').value = sale.irsaliye_no || '';
     
     const hasShipping = sale.nakliye_dahil === 1;
     document.getElementById('edit-sale-has-shipping').checked = hasShipping;
@@ -1255,10 +1416,34 @@ async function openEditSaleModal() {
     if (hasUnloading) unloadInput.removeAttribute('disabled');
     else unloadInput.setAttribute('disabled', 'true');
     
-    // Set visibility of manager only sections in edit modal based on current user role (always visible since managers columns are visible to all users)
-    const managerFields = document.querySelectorAll('#modal-edit-sale .manager-only');
-    managerFields.forEach(el => el.classList.remove('hidden'));
-
+    document.getElementById('edit-sale-new-prod-name').value = '';
+    document.getElementById('edit-sale-new-irsaliye-no').value = '';
+    document.getElementById('edit-sale-new-qty').value = '1';
+    document.getElementById('edit-sale-new-purchase-price').value = '';
+    document.getElementById('edit-sale-new-base-price').value = '';
+    
+    if (sale.urunler && sale.urunler.length > 0) {
+      editSaleProducts = sale.urunler.map(u => ({ ...u }));
+    } else {
+      editSaleProducts = [{
+        id: null,
+        urun_adi: sale.urun_adi || '',
+        miktar: sale.miktar || 0.0,
+        birim: sale.birim || 'TORBA',
+        fiyat_birimi: sale.fiyat_birimi || 'TON',
+        torba_agirligi: sale.torba_agirligi || 50.0,
+        alis_fiyati: sale.alis_fiyati || 0.0,
+        alis_birimi: sale.alis_birimi || '',
+        baz_satis_fiyati: sale.baz_satis_fiyati || 0.0,
+        birim_fiyat: sale.birim_fiyat || 0.0,
+        toplam_tutar: sale.toplam_tutar || 0.0,
+        kar: sale.kar || 0.0,
+        irsaliye_no: sale.irsaliye_no || '',
+        irsaliye_yolu: sale.irsaliye_yolu || ''
+      }];
+    }
+    
+    renderEditSaleProductsTable();
     openModal('modal-edit-sale');
     runEditSaleCalculation();
   } catch (err) {
@@ -1266,44 +1451,184 @@ async function openEditSaleModal() {
   }
 }
 
+function renderEditSaleProductsTable() {
+  const tableBody = document.querySelector('#edit-sale-products-table tbody');
+  if (!tableBody) return;
+  tableBody.innerHTML = '';
+  
+  if (editSaleProducts.length === 0) {
+    tableBody.innerHTML = `
+      <tr>
+        <td colspan="7" style="text-align: center; color: var(--text-secondary); padding: 15px;">Henüz ürün eklenmedi. Lütfen en az bir ürün ekleyin.</td>
+      </tr>
+    `;
+    return;
+  }
+  
+  editSaleProducts.forEach((p, idx) => {
+    const tr = document.createElement('tr');
+    
+    const purPriceText = p.alis_fiyati > 0 
+      ? `${formatMoney(p.alis_fiyati)} ₺/${p.alis_birimi || p.birim}` 
+      : '-';
+      
+    tr.innerHTML = `
+      <td>${p.urun_adi}</td>
+      <td>${p.miktar}</td>
+      <td>${p.birim}</td>
+      <td class="manager-col ${currentRole ? '' : 'hidden'}">${purPriceText}</td>
+      <td>${formatMoney(p.baz_satis_fiyati)} ₺/${p.fiyat_birimi}</td>
+      <td>${p.irsaliye_no || '-'}</td>
+      <td style="text-align: center;">
+        <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); removeProductFromEditList(${idx})">Sil</button>
+      </td>
+    `;
+    tableBody.appendChild(tr);
+  });
+}
+
+window.removeProductFromEditList = function(idx) {
+  editSaleProducts.splice(idx, 1);
+  renderEditSaleProductsTable();
+  runEditSaleCalculation();
+};
+
+function addProductToEditList(e) {
+  if (e) e.preventDefault();
+  
+  const prodName = document.getElementById('edit-sale-new-prod-name').value.trim().toUpperCase();
+  if (!prodName) {
+    alert('Lütfen Ürün Adı / Kodu giriniz.');
+    return;
+  }
+  
+  const qty = getFloatValue('edit-sale-new-qty', 1.0, 0.0001);
+  if (qty <= 0) {
+    alert('Miktar 0\'dan büyük olmalıdır.');
+    return;
+  }
+  
+  const basePrice = getFloatValue('edit-sale-new-base-price', 0.0);
+  if (basePrice <= 0) {
+    alert('Baz Satış Fiyatı 0\'dan büyük olmalıdır.');
+    return;
+  }
+  
+  const purchasePrice = getFloatValue('edit-sale-new-purchase-price', 0.0);
+  const bagWeight = getFloatValue('edit-sale-new-bag-weight', 50.0, 0.0001);
+  const unitType = document.getElementById('edit-sale-new-unit-type').value;
+  const purchasePriceType = document.getElementById('edit-sale-new-purchase-price-type').value;
+  const basePriceType = document.getElementById('edit-sale-new-base-price-type').value;
+  const irsaliyeNo = document.getElementById('edit-sale-new-irsaliye-no').value.trim();
+  
+  const weights = { 'KG': 1.0, 'TON': 1000.0, 'TORBA': bagWeight, 'M2': 1.0 };
+  let purConversionFactor = 1.0;
+  if (unitType !== purchasePriceType && unitType !== 'M2' && purchasePriceType !== 'M2') {
+    purConversionFactor = (weights[unitType] || 1.0) / (weights[purchasePriceType] || 1.0);
+  }
+  let selConversionFactor = 1.0;
+  if (unitType !== basePriceType && unitType !== 'M2' && basePriceType !== 'M2') {
+    selConversionFactor = (weights[unitType] || 1.0) / (weights[basePriceType] || 1.0);
+  }
+  
+  const convertedPurchasePrice = purchasePrice * purConversionFactor;
+  const convertedBasePrice = basePrice * selConversionFactor;
+  
+  const baseSubtotal = convertedBasePrice * qty;
+  const kar = purchasePrice > 0 ? (convertedBasePrice - convertedPurchasePrice) * qty : 0.0;
+  
+  editSaleProducts.push({
+    urun_adi: prodName,
+    miktar: qty,
+    birim: unitType,
+    fiyat_birimi: basePriceType,
+    torba_agirligi: bagWeight,
+    alis_fiyati: purchasePrice,
+    alis_birimi: purchasePriceType,
+    baz_satis_fiyati: basePrice,
+    birim_fiyat: convertedBasePrice,
+    base_subtotal: baseSubtotal,
+    kar: kar,
+    irsaliye_no: irsaliyeNo,
+    irsaliye_yolu: ''
+  });
+  
+  document.getElementById('edit-sale-new-prod-name').value = '';
+  document.getElementById('edit-sale-new-irsaliye-no').value = '';
+  document.getElementById('edit-sale-new-qty').value = '1';
+  document.getElementById('edit-sale-new-purchase-price').value = '';
+  document.getElementById('edit-sale-new-base-price').value = '';
+  
+  renderEditSaleProductsTable();
+  runEditSaleCalculation();
+}
+
 async function saveEditSaleRecord() {
   const sid = parseInt(document.getElementById('edit-sale-id').value);
   if (!sid) return;
 
-  const pName = document.getElementById('edit-sale-prod-name').value.trim().toUpperCase();
-  if (!pName) {
-    alert('Lütfen Ürün Adı / Kodu giriniz.');
+  if (editSaleProducts.length === 0) {
+    alert('Lütfen en az bir ürün ekleyin.');
     return;
   }
 
   const calc = runEditSaleCalculation();
   if (!calc) return;
 
+  const hasShipping = document.getElementById('edit-sale-has-shipping').checked;
+  const shipCost = hasShipping ? getFloatValue('edit-sale-shipping-cost', 0.0) : 0.0;
+  const hasUnloading = document.getElementById('edit-sale-has-unloading').checked;
+  const unloadCost = hasUnloading ? getFloatValue('edit-sale-unloading-cost', 0.0) : 0.0;
+
+  const urunlerForSave = editSaleProducts.map(p => {
+    const shareOfExtra = calc.netProductTotal > 0 ? (p.base_subtotal / calc.netProductTotal) * (shipCost + unloadCost) : 0.0;
+    const finalItemTotal = (p.base_subtotal + shareOfExtra) * (1 + calc.finalAppliedRate / 100);
+    const finalItemUnitPrice = p.miktar > 0 ? finalItemTotal / p.miktar : 0.0;
+
+    return {
+      id: p.id || null,
+      urun_adi: p.urun_adi,
+      miktar: p.miktar,
+      birim: p.birim,
+      fiyat_birimi: p.fiyat_birimi,
+      torba_agirligi: p.torba_agirligi,
+      alis_fiyati: p.alis_fiyati,
+      alis_birimi: p.alis_birimi,
+      baz_satis_fiyati: p.baz_satis_fiyati,
+      birim_fiyat: finalItemUnitPrice,
+      toplam_tutar: finalItemTotal,
+      kar: p.kar,
+      irsaliye_no: p.irsaliye_no || '',
+      irsaliye_yolu: p.irsaliye_yolu || ''
+    };
+  });
+
   const saleData = {
     tarih: editingSaleMetadata.tarih,
     kullanici: editingSaleMetadata.kullanici,
     irsaliye_yolu: editingSaleMetadata.irsaliye_yolu,
     musteri_adi: document.getElementById('edit-sale-cust-name').value.trim().toUpperCase() || '..............',
-    urun_adi: pName,
-    miktar: getFloatValue('edit-sale-qty', 1.0, 0.0001),
-    birim: document.getElementById('edit-sale-unit-type').value,
-    fiyat_birimi: document.getElementById('edit-sale-base-price-type').value,
-    torba_agirligi: getFloatValue('edit-sale-bag-weight', 50.0, 0.0001),
-    alis_fiyati: getFloatValue('edit-sale-purchase-price', 0.0),
-    alis_birimi: document.getElementById('edit-sale-purchase-price-type').value,
-    baz_satis_fiyati: getFloatValue('edit-sale-base-price', 0.0),
+    urun_adi: '',
+    miktar: 0.0,
+    birim: '',
+    fiyat_birimi: '',
+    torba_agirligi: 0.0,
+    alis_fiyati: 0.0,
+    alis_birimi: '',
+    baz_satis_fiyati: 0.0,
     odeme_turu: document.getElementById('edit-sale-receipt-type').value,
     vade_ay: parseInt(document.getElementById('edit-sale-vade-months').value) || 0,
     vade_orani: getFloatValue('edit-sale-vade-rate', 0.0),
-    birim_fiyat: calc.convertedBasePrice,
+    birim_fiyat: 0.0,
     toplam_tutar: calc.totalFinalPrice,
     kar: calc.totalProfit,
-    nakliye_dahil: document.getElementById('edit-sale-has-shipping').checked ? 1 : 0,
-    nakliye_maliyeti: getFloatValue('edit-sale-shipping-cost', 0.0),
-    indirme_dahil: document.getElementById('edit-sale-has-unloading').checked ? 1 : 0,
-    indirme_maliyeti: getFloatValue('edit-sale-unloading-cost', 0.0),
+    nakliye_dahil: hasShipping ? 1 : 0,
+    nakliye_maliyeti: shipCost,
+    indirme_dahil: hasUnloading ? 1 : 0,
+    indirme_maliyeti: unloadCost,
     fatura_no: document.getElementById('edit-sale-fatura-no').value.trim(),
-    irsaliye_no: document.getElementById('edit-sale-irsaliye-no').value.trim()
+    irsaliye_no: '',
+    urunler: urunlerForSave
   };
 
   try {
@@ -1378,11 +1703,78 @@ async function viewSaleDetail() {
       document.getElementById('det-teslim-notu').textContent = '-';
     }
     
+    const productsTableBody = document.querySelector('#det-products-table tbody');
+    productsTableBody.innerHTML = '';
+    
+    const urunler = sale.urunler || [];
+    if (urunler.length === 0) {
+      productsTableBody.innerHTML = `
+        <tr>
+          <td colspan="9" style="text-align: center; color: var(--text-secondary); padding: 10px;">Ürün detay bilgisi bulunamadı.</td>
+        </tr>
+      `;
+    } else {
+      urunler.forEach(u => {
+        const tr = document.createElement('tr');
+        
+        let waybillBtnHtml = '';
+        if (u.irsaliye_yolu) {
+          waybillBtnHtml = `
+            <button class="btn btn-success btn-sm" onclick="event.stopPropagation(); viewItemWaybill(${sale.id}, ${u.id})">Gör</button>
+            <button class="btn btn-outline btn-sm" onclick="event.stopPropagation(); uploadItemWaybill(${sale.id}, ${u.id})">Değiştir</button>
+          `;
+        } else {
+          waybillBtnHtml = `
+            <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); uploadItemWaybill(${sale.id}, ${u.id})">Yükle</button>
+          `;
+        }
+        
+        const profitMarginPct = (u.alis_fiyati > 0) ? ((u.birim_fiyat - u.alis_fiyati) / u.alis_fiyati * 100) : 0.0;
+        const profitText = u.alis_fiyati > 0 
+          ? `${formatMoney(u.kar)} ₺ (${profitMarginPct >= 0 ? '+' : ''}${profitMarginPct.toFixed(2)}%)` 
+          : '-';
+          
+        tr.innerHTML = `
+          <td>${u.urun_adi}</td>
+          <td>${u.miktar}</td>
+          <td>${u.birim}</td>
+          <td>${formatMoney(u.birim_fiyat)} ₺</td>
+          <td>${formatMoney(u.toplam_tutar)} ₺</td>
+          <td class="manager-col ${currentRole ? '' : 'hidden'}">${u.alis_fiyati > 0 ? formatMoney(u.alis_fiyati) + ' ₺/' + (u.alis_birimi || u.birim) : '-'}</td>
+          <td class="manager-col ${currentRole ? '' : 'hidden'}">${profitText}</td>
+          <td>${u.irsaliye_no || '-'}</td>
+          <td>${waybillBtnHtml}</td>
+        `;
+        productsTableBody.appendChild(tr);
+      });
+    }
+    
     openModal('modal-sale-details');
   } catch (err) {
     alert(`Detaylar yüklenemedi:\n${err.message}`);
   }
 }
+
+window.uploadItemWaybill = async function(saleId, productId) {
+  try {
+    const destPath = await window.api.uploadWaybill({ saleId, urunId: productId });
+    if (destPath) {
+      alert('İrsaliye dosyası başarıyla yüklendi.');
+      await viewSaleDetail();
+      refreshSalesTable();
+    }
+  } catch (err) {
+    alert(`Dosya yüklenirken hata oluştu:\n${err.message}`);
+  }
+};
+
+window.viewItemWaybill = async function(saleId, productId) {
+  try {
+    await window.api.viewWaybill({ saleId, urunId: productId });
+  } catch (err) {
+    alert(err.message);
+  }
+};
 
 async function uploadWaybillFile() {
   if (!selectedSaleRowId) {
