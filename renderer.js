@@ -723,6 +723,13 @@ function setupCalculationTraces() {
     if (e.target.checked) {
       el.removeAttribute('disabled');
     } else {
+      el.setAttribute('disabled', 'true');
+      el.value = '';
+    }
+    runCumulativePriceCalculation();
+  });
+}
+
 function runCumulativePriceCalculation() {
   const qty = getFloatValue('qty', 1.0, 0.0001);
   const basePrice = getFloatValue('base-price', 0.0);
@@ -864,11 +871,6 @@ function runCumulativePriceCalculation() {
       <td>${unitPriceText}</td>
       <td>${formatMoney(totalFinalPrice)} ₺</td>
       <td class="manager-col ${currentRole ? '' : 'hidden'}">${profitText}</td>
-    `;
-    tableBody.appendChild(tr);
-  });
-}ice)} ₺</td>
-      <td class="manager-col ${currentUser ? '' : 'hidden'}">${profitText}</td>
     `;
     tableBody.appendChild(tr);
   });
