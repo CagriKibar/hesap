@@ -2863,7 +2863,7 @@ class HausmartApp:
     def check_python_update(self):
         import urllib.request
         cfg = load_config()
-        repo = cfg.get("github_repo", "hausmart-dev/satis-takip")
+        repo = cfg.get("github_repo", "CagriKibar/hesap")
         url = f"https://raw.githubusercontent.com/{repo}/main/package.json"
         try:
             req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
@@ -2871,13 +2871,20 @@ class HausmartApp:
                 data = json.loads(response.read().decode('utf-8'))
                 remote_version = data.get("version", "1.0.0")
                 local_version = "1.0.0"
+                pkg_file = os.path.join(_BASE_DIR, "package.json")
+                if os.path.exists(pkg_file):
+                    try:
+                        with open(pkg_file, "r", encoding="utf-8") as pf:
+                            local_version = json.load(pf).get("version", "1.0.0")
+                    except Exception:
+                        pass
                 if remote_version != local_version:
-                    self.root.after(0, lambda: self.show_python_update_ui(remote_version))
+                    self.root.after(0, lambda: self.show_python_update_ui(remote_version, local_version))
         except Exception as e:
             print("Python check update failed:", e)
 
-    def show_python_update_ui(self, remote_version):
-        self.lbl_update_status.config(text=f"Yeni Sürüm Mevcut: v{remote_version} (Mevcut: v1.0.0)")
+    def show_python_update_ui(self, remote_version, local_version="1.0.0"):
+        self.lbl_update_status.config(text=f"Yeni Sürüm Mevcut: v{remote_version} (Mevcut: v{local_version})")
         self.update_frame.pack(fill=tk.X, pady=10)
         self.btn_update.pack()
 
@@ -2890,7 +2897,7 @@ class HausmartApp:
         import zipfile
         import shutil
         cfg = load_config()
-        repo = cfg.get("github_repo", "hausmart-dev/satis-takip")
+        repo = cfg.get("github_repo", "CagriKibar/hesap")
         zip_url = f"https://github.com/{repo}/archive/refs/heads/main.zip"
         try:
             zip_path = "update.zip"
