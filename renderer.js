@@ -455,20 +455,24 @@ async function refreshConnectionIndicator() {
   }
 }
 
-function openConnectionSettingsModal() {
-  window.api.loadConfig().then(config => {
-    // Select correct radio
-    const radio = document.querySelector(`input[name="conn-mode"][value="${config.mod}"]`);
-    if (radio) {
-      radio.checked = true;
-      triggerConnectionSubForms(config.mod);
+async function openConnectionSettingsModal() {
+  openModal('modal-conn-settings');
+  try {
+    const config = await window.api.loadConfig();
+    if (config) {
+      const radio = document.querySelector(`input[name="conn-mode"][value="${config.mod}"]`);
+      if (radio) {
+        radio.checked = true;
+        triggerConnectionSubForms(config.mod);
+      }
+      const dbPathEl = document.getElementById('conn-db-path');
+      if (dbPathEl) dbPathEl.value = config.db_yolu || '';
+      const srvUrlEl = document.getElementById('conn-server-url');
+      if (srvUrlEl) srvUrlEl.value = config.sunucu_url || '';
     }
-    
-    document.getElementById('conn-db-path').value = config.db_yolu || '';
-    document.getElementById('conn-server-url').value = config.sunucu_url || '';
-    
-    openModal('modal-conn-settings');
-  });
+  } catch (err) {
+    console.error('Error loading config in modal:', err);
+  }
 }
 
 // Handle radio sub-forms visibility
