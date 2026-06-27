@@ -437,20 +437,21 @@ function setupTabEvents() {
 
 // ==================== CONNECTION & CONFIGS ====================
 async function refreshConnectionIndicator() {
+  const indicator = document.getElementById('login-mode-indicator');
   try {
     const config = await window.api.loadConfig();
-    const indicator = document.getElementById('login-mode-indicator');
     if (!indicator) return;
     
-    if (config.mod === 'istemci') {
+    if (config && config.mod === 'istemci') {
       indicator.textContent = `🌐 İstemci: ${config.sunucu_url}`;
-    } else if (config.mod === 'paylasim') {
+    } else if (config && config.mod === 'paylasim') {
       indicator.textContent = `🖥 Ağ Paylaşım: SQLite`;
     } else {
       indicator.textContent = `🖥 Yerel Mod`;
     }
   } catch (e) {
     console.error('Error refreshing connection indicator:', e);
+    if (indicator) indicator.textContent = `🖥 Yerel Mod`;
   }
 }
 
