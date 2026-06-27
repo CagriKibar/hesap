@@ -257,24 +257,35 @@ function updateThemeButtonUI(theme) {
 }
 
 // --- Load Initialization on Startup ---
-document.addEventListener('DOMContentLoaded', async () => {
-  // Initialize theme
+document.addEventListener('DOMContentLoaded', () => {
+  // 1. Initialize theme synchronously
   initTheme();
   const btnToggleTheme = document.getElementById('btn-toggle-theme');
   if (btnToggleTheme) btnToggleTheme.addEventListener('click', toggleTheme);
   const btnToggleThemeLogin = document.getElementById('btn-toggle-theme-login');
   if (btnToggleThemeLogin) btnToggleThemeLogin.addEventListener('click', toggleTheme);
 
-  // Load synced rates
-  await loadPaymentRates();
+  // 2. Bind ALL UI Event Listeners FIRST so buttons always work unconditionally
+  document.getElementById('btn-login').addEventListener('click', handleLogin);
+  document.getElementById('login-password').addEventListener('keyup', (e) => {
+    if (e.key === 'Enter') handleLogin();
+  });
   
-  // Periodically refresh payment rates every 5 seconds to sync between clients
-  setInterval(loadPaymentRates, 5000);
-
-  // Check for Github updates on startup
-  checkUpdates();
+  // Connection settings panel
+  document.getElementById('btn-open-conn-settings').addEventListener('click', openConnectionSettingsModal);
+  document.getElementById('btn-test-conn-settings').addEventListener('click', testConnectionSettings);
+  document.getElementById('btn-save-conn-settings').addEventListener('click', saveConnectionSettings);
+  const btnBrowseDb = document.getElementById('btn-browse-db-path');
+  if (btnBrowseDb) {
+    btnBrowseDb.addEventListener('click', async () => {
+      const selected = await window.api.selectDbFile();
+      if (selected) {
+        document.getElementById('conn-db-path').value = selected;
+      }
+    });
+  }
   
-  // Bind Update trigger
+  // Update buttons
   const btnInstallUpdate = document.getElementById('btn-install-update');
   if (btnInstallUpdate) {
     btnInstallUpdate.addEventListener('click', async () => {
@@ -293,44 +304,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     });
   }
-
-  // Manual update check button
   const btnCheckUpdateManual = document.getElementById('btn-check-update-manual');
   if (btnCheckUpdateManual) {
     btnCheckUpdateManual.addEventListener('click', handleManualUpdateCheck);
   }
 
-  // Bind change/blur listeners to rate inputs to save changes to DB
-  document.querySelectorAll('.rate-input').forEach(el => {
-    el.addEventListener('change', saveRatesToDb);
-    el.addEventListener('blur', saveRatesToDb);
-  });
-
-  setupTabEvents();
-  setupCalculationTraces();
-  setupModalEvents();
-  await refreshConnectionIndicator();
-  
-  // Bind Login Trigger
-  document.getElementById('btn-login').addEventListener('click', handleLogin);
-  document.getElementById('login-password').addEventListener('keyup', (e) => {
-    if (e.key === 'Enter') handleLogin();
-  });
-  
-  // Connection panel
-  document.getElementById('btn-open-conn-settings').addEventListener('click', openConnectionSettingsModal);
-  document.getElementById('btn-test-conn-settings').addEventListener('click', testConnectionSettings);
-  document.getElementById('btn-save-conn-settings').addEventListener('click', saveConnectionSettings);
-  const btnBrowseDb = document.getElementById('btn-browse-db-path');
-  if (btnBrowseDb) {
-    btnBrowseDb.addEventListener('click', async () => {
-      const selected = await window.api.selectDbFile();
-      if (selected) {
-        document.getElementById('conn-db-path').value = selected;
-      }
-    });
-  }
-  
   // Dashboard Action Triggers
   document.getElementById('btn-logout').addEventListener('click', handleLogout);
   document.getElementById('btn-refresh-sales').addEventListener('click', refreshSalesTable);
@@ -375,15 +353,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('server-btn-change-conn').addEventListener('click', openConnectionSettingsModal);
   document.getElementById('server-btn-show-db-folder').addEventListener('click', openDbFolderInExplorer);
   document.getElementById('btn-toggle-integrated-server').addEventListener('click', toggleIntegratedExpressServer);
-  
-  // Pre-load default local connection configs if files ready
-  const config = await window.api.loadConfig();
-  if (config) {
-    document.getElementById('conn-db-path').value = config.db_yolu || '';
-    document.getElementById('conn-server-url').value = config.sunucu_url || '';
-  }
-  
-  // Bind Kuisoft Signature clicks to open externally
+
+  document.querySelectorAll('.rate-input').forEach(el => {
+    el.addEventListener('change', saveRatesToDb);
+    el.addEventListener('blur', saveRatesToDb);
+  });
+
+  setupTabEvents();
+  setupCalculationTraces();
+  setupModalEvents();
+
+  // Signature links
   const sigLogin = document.getElementById('link-signature-login');
   if (sigLogin) {
     sigLogin.addEventListener('click', (e) => {
@@ -398,6 +378,30 @@ document.addEventListener('DOMContentLoaded', async () => {
       window.api.openExternal('https://www.kuisoft.com/');
     });
   }
+
+  // 3. Asynchronous initializations (isolated in try-catch so failures never break UI)
+  (async () => {
+    try {
+      await refreshConnectionIndicator();
+    } catch (e) { console.error('refreshConnectionIndicator failed:', e); }
+    
+    try {
+      await loadPaymentRates();
+      setInterval(loadPaymentRates, 5000);
+    } catch (e) { console.error('loadPaymentRates failed:', e); }
+
+    try {
+      checkUpdates();
+    } catch (e) { console.error('checkUpdates failed:', e); }
+
+    try {
+      const config = await window.api.loadConfig();
+      if (config) {
+        document.getElementById('conn-db-path').value = config.db_yolu || '';
+        document.getElementById('conn-server-url').value = config.sunucu_url || '';
+      }
+    } catch (e) { console.error('loadConfig failed:', e); }
+  })();
 });
 
 // ==================== TABS MANAGEMENT ====================

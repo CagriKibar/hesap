@@ -974,28 +974,41 @@ ipcMain.handle('delete-user', async (event, uid) => {
 
 // Rates Synchronization (Ayarlar)
 ipcMain.handle('get-rates', async () => {
-  const cfg = loadConfigSync();
-  if (cfg.mod === 'istemci') {
-    return await apiCall('get', '/api/ayarlar');
-  } else {
-    const rows = db.execQuery("SELECT anahtar, deger FROM ayarlar");
-    const rates = {};
-    rows.forEach(r => {
-      rates[r.anahtar] = parseFloat(r.deger) || 0.0;
-    });
-    return rates;
+  const defaultRates = {
+    rate_cash: 0.0, rate_cc: 3.0, rate_check: 5.0, rate_note: 8.0, rate_doc: 4.0, rate_dbs: 2.0
+  };
+  try {
+    const cfg = loadConfigSync();
+    if (cfg.mod === 'istemci') {
+      return await apiCall('get', '/api/ayarlar');
+    } else {
+      const rows = db.execQuery("SELECT anahtar, deger FROM ayarlar");
+      const rates = {};
+      rows.forEach(r => {
+        rates[r.anahtar] = parseFloat(r.deger) || 0.0;
+      });
+      return { ...defaultRates, ...rates };
+    }
+  } catch (err) {
+    console.error('get-rates failed, returning defaults:', err.message);
+    return defaultRates;
   }
 });
 
 ipcMain.handle('save-rates', async (event, rates) => {
-  const cfg = loadConfigSync();
-  if (cfg.mod === 'istemci') {
-    return await apiCall('post', '/api/ayarlar', rates);
-  } else {
-    for (const key of Object.keys(rates)) {
-      db.execRun("INSERT OR REPLACE INTO ayarlar (anahtar, deger) VALUES (?, ?)", [key, String(rates[key])]);
+  try {
+    const cfg = loadConfigSync();
+    if (cfg.mod === 'istemci') {
+      return await apiCall('post', '/api/ayarlar', rates);
+    } else {
+      for (const key of Object.keys(rates)) {
+        db.execRun("INSERT OR REPLACE INTO ayarlar (anahtar, deger) VALUES (?, ?)", [key, String(rates[key])]);
+      }
+      return { ok: true };
     }
-    return { ok: true };
+  } catch (err) {
+    console.error('save-rates failed:', err.message);
+    return { ok: false, error: err.message };
   }
 });
 
