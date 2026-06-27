@@ -257,30 +257,37 @@ function updateThemeButtonUI(theme) {
 }
 
 // --- Load Initialization on Startup ---
+function safeOn(id, event, fn) {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener(event, fn);
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   // 1. Initialize theme synchronously
   initTheme();
-  const btnToggleTheme = document.getElementById('btn-toggle-theme');
-  if (btnToggleTheme) btnToggleTheme.addEventListener('click', toggleTheme);
-  const btnToggleThemeLogin = document.getElementById('btn-toggle-theme-login');
-  if (btnToggleThemeLogin) btnToggleThemeLogin.addEventListener('click', toggleTheme);
+  safeOn('btn-toggle-theme', 'click', toggleTheme);
+  safeOn('btn-toggle-theme-login', 'click', toggleTheme);
 
   // 2. Bind ALL UI Event Listeners FIRST so buttons always work unconditionally
-  document.getElementById('btn-login').addEventListener('click', handleLogin);
-  document.getElementById('login-password').addEventListener('keyup', (e) => {
-    if (e.key === 'Enter') handleLogin();
-  });
+  safeOn('btn-login', 'click', handleLogin);
+  const passEl = document.getElementById('login-password');
+  if (passEl) {
+    passEl.addEventListener('keyup', (e) => {
+      if (e.key === 'Enter') handleLogin();
+    });
+  }
   
   // Connection settings panel
-  document.getElementById('btn-open-conn-settings').addEventListener('click', openConnectionSettingsModal);
-  document.getElementById('btn-test-conn-settings').addEventListener('click', testConnectionSettings);
-  document.getElementById('btn-save-conn-settings').addEventListener('click', saveConnectionSettings);
+  safeOn('btn-open-conn-settings', 'click', openConnectionSettingsModal);
+  safeOn('btn-test-conn-settings', 'click', testConnectionSettings);
+  safeOn('btn-save-conn-settings', 'click', saveConnectionSettings);
   const btnBrowseDb = document.getElementById('btn-browse-db-path');
   if (btnBrowseDb) {
     btnBrowseDb.addEventListener('click', async () => {
       const selected = await window.api.selectDbFile();
       if (selected) {
-        document.getElementById('conn-db-path').value = selected;
+        const pEl = document.getElementById('conn-db-path');
+        if (pEl) pEl.value = selected;
       }
     });
   }
@@ -304,55 +311,52 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
-  const btnCheckUpdateManual = document.getElementById('btn-check-update-manual');
-  if (btnCheckUpdateManual) {
-    btnCheckUpdateManual.addEventListener('click', handleManualUpdateCheck);
-  }
+  safeOn('btn-check-update-manual', 'click', handleManualUpdateCheck);
 
   // Dashboard Action Triggers
-  document.getElementById('btn-logout').addEventListener('click', handleLogout);
-  document.getElementById('btn-refresh-sales').addEventListener('click', refreshSalesTable);
-  document.getElementById('btn-export-all-excel').addEventListener('click', handleExportAllSalesExcel);
-  document.getElementById('btn-export-all-pdf').addEventListener('click', handleExportAllSalesPdf);
-  document.getElementById('btn-refresh-history-products').addEventListener('click', refreshHistoryProducts);
-  document.getElementById('history-product-dropdown').addEventListener('change', refreshPriceHistory);
-  document.getElementById('btn-refresh-users').addEventListener('click', refreshUsersTable);
+  safeOn('btn-logout', 'click', handleLogout);
+  safeOn('btn-refresh-sales', 'click', refreshSalesTable);
+  safeOn('btn-export-all-excel', 'click', handleExportAllSalesExcel);
+  safeOn('btn-export-all-pdf', 'click', handleExportAllSalesPdf);
+  safeOn('btn-refresh-history-products', 'click', refreshHistoryProducts);
+  safeOn('history-product-dropdown', 'change', refreshPriceHistory);
+  safeOn('btn-refresh-users', 'click', refreshUsersTable);
   
   // Calculation Tab Action Buttons
-  document.getElementById('btn-export-excel').addEventListener('click', exportPriceAnalysisExcel);
-  document.getElementById('btn-export-pdf').addEventListener('click', exportPriceAnalysisPdf);
-  document.getElementById('btn-save-sale').addEventListener('click', saveSaleRecord);
-  document.getElementById('btn-add-product-to-list').addEventListener('click', addProductToCurrentList);
+  safeOn('btn-export-excel', 'click', exportPriceAnalysisExcel);
+  safeOn('btn-export-pdf', 'click', exportPriceAnalysisPdf);
+  safeOn('btn-save-sale', 'click', saveSaleRecord);
+  safeOn('btn-add-product-to-list', 'click', addProductToCurrentList);
   
   // Sales Tab Action Buttons
-  document.getElementById('btn-view-sale-detail').addEventListener('click', viewSaleDetail);
-  document.getElementById('btn-edit-sale').addEventListener('click', openEditSaleModal);
-  document.getElementById('btn-save-edit-sale').addEventListener('click', saveEditSaleRecord);
-  document.getElementById('btn-edit-sale-add-product').addEventListener('click', addProductToEditList);
+  safeOn('btn-view-sale-detail', 'click', viewSaleDetail);
+  safeOn('btn-edit-sale', 'click', openEditSaleModal);
+  safeOn('btn-save-edit-sale', 'click', saveEditSaleRecord);
+  safeOn('btn-edit-sale-add-product', 'click', addProductToEditList);
   setupEditSaleCalculationTraces();
 
-  document.getElementById('btn-upload-waybill').addEventListener('click', uploadWaybillFile);
-  document.getElementById('btn-view-waybill').addEventListener('click', viewWaybillFile);
-  document.getElementById('btn-upload-invoice').addEventListener('click', uploadInvoiceFile);
-  document.getElementById('btn-view-invoice').addEventListener('click', viewInvoiceFile);
-  document.getElementById('btn-deliver-sale').addEventListener('click', openDeliverSaleModal);
-  document.getElementById('btn-save-deliver-sale').addEventListener('click', saveDeliverSaleRecord);
-  document.getElementById('btn-reprint-pdf').addEventListener('click', reprintReceiptPdf);
-  document.getElementById('btn-detail-pdf').addEventListener('click', printDetailPdf);
-  document.getElementById('btn-detail-excel').addEventListener('click', printDetailExcel);
-  document.getElementById('btn-delete-sale').addEventListener('click', deleteSaleRecord);
+  safeOn('btn-upload-waybill', 'click', uploadWaybillFile);
+  safeOn('btn-view-waybill', 'click', viewWaybillFile);
+  safeOn('btn-upload-invoice', 'click', uploadInvoiceFile);
+  safeOn('btn-view-invoice', 'click', viewInvoiceFile);
+  safeOn('btn-deliver-sale', 'click', openDeliverSaleModal);
+  safeOn('btn-save-deliver-sale', 'click', saveDeliverSaleRecord);
+  safeOn('btn-reprint-pdf', 'click', reprintReceiptPdf);
+  safeOn('btn-detail-pdf', 'click', printDetailPdf);
+  safeOn('btn-detail-excel', 'click', printDetailExcel);
+  safeOn('btn-delete-sale', 'click', deleteSaleRecord);
   
   // User Management Tab Action Buttons
-  document.getElementById('btn-add-user').addEventListener('click', openAddUserModal);
-  document.getElementById('btn-edit-user').addEventListener('click', openEditUserModal);
-  document.getElementById('btn-reset-password').addEventListener('click', openResetPasswordModal);
-  document.getElementById('btn-toggle-user').addEventListener('click', toggleUserActiveStatus);
-  document.getElementById('btn-delete-user').addEventListener('click', deleteUserRecord);
+  safeOn('btn-add-user', 'click', openAddUserModal);
+  safeOn('btn-edit-user', 'click', openEditUserModal);
+  safeOn('btn-reset-password', 'click', openResetPasswordModal);
+  safeOn('btn-toggle-user', 'click', toggleUserActiveStatus);
+  safeOn('btn-delete-user', 'click', deleteUserRecord);
   
   // Server Tab Action Buttons
-  document.getElementById('server-btn-change-conn').addEventListener('click', openConnectionSettingsModal);
-  document.getElementById('server-btn-show-db-folder').addEventListener('click', openDbFolderInExplorer);
-  document.getElementById('btn-toggle-integrated-server').addEventListener('click', toggleIntegratedExpressServer);
+  safeOn('server-btn-change-conn', 'click', openConnectionSettingsModal);
+  safeOn('server-btn-show-db-folder', 'click', openDbFolderInExplorer);
+  safeOn('btn-toggle-integrated-server', 'click', toggleIntegratedExpressServer);
 
   document.querySelectorAll('.rate-input').forEach(el => {
     el.addEventListener('change', saveRatesToDb);
