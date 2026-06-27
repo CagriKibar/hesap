@@ -640,7 +640,15 @@ class HausmartApp:
         self.btn_update = ttk.Button(self.update_frame, text="Son Sürüme Güncelle", command=self.install_python_update)
         
         # Version label
-        ttk.Label(self.login_frame, text="Sürüm: v1.0.0", font=("Helvetica", 8), foreground="#aaaaaa").pack(pady=(5,0))
+        py_ver = "1.2.5"
+        pkg_f = os.path.join(_BASE_DIR, "package.json")
+        if os.path.exists(pkg_f):
+            try:
+                with open(pkg_f, "r", encoding="utf-8") as _pf:
+                    py_ver = json.load(_pf).get("version", "1.2.5")
+            except Exception:
+                pass
+        ttk.Label(self.login_frame, text=f"Sürüm: v{py_ver}", font=("Helvetica", 8), foreground="#aaaaaa").pack(pady=(5,0))
         
         # Start background check thread
         threading.Thread(target=self.check_python_update, daemon=True).start()
