@@ -321,6 +321,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('btn-open-conn-settings').addEventListener('click', openConnectionSettingsModal);
   document.getElementById('btn-test-conn-settings').addEventListener('click', testConnectionSettings);
   document.getElementById('btn-save-conn-settings').addEventListener('click', saveConnectionSettings);
+  const btnBrowseDb = document.getElementById('btn-browse-db-path');
+  if (btnBrowseDb) {
+    btnBrowseDb.addEventListener('click', async () => {
+      const selected = await window.api.selectDbFile();
+      if (selected) {
+        document.getElementById('conn-db-path').value = selected;
+      }
+    });
+  }
   
   // Dashboard Action Triggers
   document.getElementById('btn-logout').addEventListener('click', handleLogout);
@@ -471,7 +480,7 @@ function triggerConnectionSubForms(mode) {
   dbRow.classList.add('hidden');
   urlRow.classList.add('hidden');
   
-  if (mode === 'paylasim') {
+  if (mode === 'yerel' || mode === 'paylasim') {
     dbRow.classList.remove('hidden');
   } else if (mode === 'istemci') {
     urlRow.classList.remove('hidden');
@@ -641,13 +650,9 @@ function setupRoleUIViews() {
   const resetPasswordModalInputs = document.querySelectorAll('#modal-reset-password input, #modal-reset-password button');
   resetPasswordModalInputs.forEach(el => el.removeAttribute('disabled'));
 
-  // Connection settings modal: only Süper Admin can edit connection settings
-  const connSettingsInputs = document.querySelectorAll('#modal-conn-settings input, #modal-conn-settings button');
-  if (currentRole === 'Süper Admin') {
-    connSettingsInputs.forEach(el => el.removeAttribute('disabled'));
-  } else {
-    connSettingsInputs.forEach(el => el.setAttribute('disabled', 'true'));
-  }
+  // Connection settings modal: unlocked for all roles so anyone can edit DB path or IP
+  const connSettingsInputs = document.querySelectorAll('#modal-conn-settings input, #modal-conn-settings button, #modal-conn-settings select');
+  connSettingsInputs.forEach(el => el.removeAttribute('disabled'));
 
   // 5. Pricing & Sales fields permissions (payment rates inputs are now enabled for everyone so they can be edited)
   document.querySelectorAll('.manager-only').forEach(el => el.classList.remove('hidden'));

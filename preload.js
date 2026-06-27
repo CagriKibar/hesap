@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('api', {
   loadConfig: () => ipcRenderer.invoke('load-config'),
   saveConfig: (cfg) => ipcRenderer.invoke('save-config', cfg),
   testConnection: (mode, url, dbPath) => ipcRenderer.invoke('test-connection', { mode, url, dbPath }),
+  selectDbFile: () => ipcRenderer.invoke('select-db-file'),
   getRates: () => ipcRenderer.invoke('get-rates'),
   saveRates: (rates) => ipcRenderer.invoke('save-rates', rates),
   

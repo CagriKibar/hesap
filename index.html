@@ -631,20 +631,23 @@
           Ağ Paylaşım Modu (Ağ üzerindeki SQLite dosyası)
         </label>
         <div id="conn-row-db-path" class="modal-sub-form hidden">
-          <label for="conn-db-path">Ağ DB Dosya Yolu</label>
-          <input type="text" id="conn-db-path" placeholder="\\SUNUCU-PC\Paylasim\satis_takip.db">
-          <span class="help-text">Örnek: \\SUNUCU-PC\Paylasim\satis_takip.db</span>
+          <label for="conn-db-path">Veritabanı Dosya Yolu (.db)</label>
+          <div class="flex-row gap-5" style="margin-bottom: 5px;">
+            <input type="text" id="conn-db-path" placeholder="Örn: C:\klasor\satis_takip.db veya \\SUNUCU-PC\Paylasim\satis_takip.db" style="flex-grow: 1;">
+            <button id="btn-browse-db-path" class="btn btn-outline btn-sm" type="button" style="white-space: nowrap;">📂 Dosya Seç</button>
+          </div>
+          <span class="help-text">Dilediğiniz bilgisayardan yerel klasör yolunu veya ağ klasör yolunu girin.</span>
         </div>
 
         <label class="radio-container">
           <input type="radio" name="conn-mode" value="istemci">
           <span class="radio-checkmark"></span>
-          HTTP İstemci Modu (Sunucu API'sine bağlan)
+          HTTP İstemci Modu (Sunucu API / IP Adresine bağlan)
         </label>
         <div id="conn-row-server-url" class="modal-sub-form hidden">
-          <label for="conn-server-url">Sunucu API Adresi</label>
+          <label for="conn-server-url">Sunucu API / IP Adresi</label>
           <input type="text" id="conn-server-url" placeholder="http://192.168.1.100:8765">
-          <span class="help-text">Örnek: http://192.168.1.100:8765</span>
+          <span class="help-text">Bağlanmak istediğiniz sunucunun IP adresini girin (Örn: http://192.168.1.100:8765).</span>
         </div>
       </div>
       <!-- Connection Guide / Troubleshoot -->

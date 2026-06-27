@@ -348,18 +348,34 @@ ipcMain.handle('save-config', async (event, cfg) => {
   return true;
 });
 
+// Select Database File Dialog
+ipcMain.handle('select-db-file', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Veritabanı Dosyası Seçin (.db)',
+    filters: [
+      { name: 'SQLite Veritabanı', extensions: ['db', 'sqlite', 'sqlite3'] },
+      { name: 'Tüm Dosyalar', extensions: ['*'] }
+    ],
+    properties: ['openFile']
+  });
+  if (result.canceled || result.filePaths.length === 0) {
+    return null;
+  }
+  return result.filePaths[0];
+});
+
 // Test Connection
 ipcMain.handle('test-connection', async (event, { mode, url, dbPath }) => {
-  if (mode === 'yerel') {
-    return { ok: true, msg: 'Yerel mod seçildi, veritabanı doğrudan açılacak.' };
-  }
-  if (mode === 'paylasim') {
+  if (mode === 'yerel' || mode === 'paylasim') {
     try {
+      if (!dbPath) {
+        return { ok: true, msg: 'Varsayılan veritabanı yolu kullanılacak.' };
+      }
       const dir = path.dirname(dbPath);
       if (fs.existsSync(dir)) {
-        return { ok: true, msg: `Ağ klasörüne erişim başarılı:\n${dir}` };
+        return { ok: true, msg: `Veritabanı konumuna erişim başarılı:\n${dbPath}` };
       } else {
-        return { ok: false, msg: `Ağ klasörüne erişilemedi:\n${dir}\nYolu veya izinleri kontrol edin.` };
+        return { ok: false, msg: `Klasöre veya veritabanı yoluna erişilemedi:\n${dir}\nYolu ve izinleri kontrol edin.` };
       }
     } catch (e) {
       return { ok: false, msg: `Hata: ${e.message}` };
