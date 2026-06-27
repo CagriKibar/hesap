@@ -647,34 +647,7 @@ class HausmartApp:
 
     def perform_login(self):
         cfg = load_config()
-        server_url = self.server_ip_var.get().strip()
-        db_path = self.db_path_var.get().strip()
-        
-        changed = False
-        if server_url:
-            if not server_url.startswith("http://") and not server_url.startswith("https://"):
-                server_url = "http://" + server_url
-            url_part = server_url[7:] if server_url.startswith("http://") else server_url[8:]
-            if ":" not in url_part:
-                server_url = server_url.rstrip("/") + ":8765"
-            
-            if cfg.get("mod") != "istemci" or cfg.get("sunucu_url") != server_url:
-                cfg["mod"] = "istemci"
-                cfg["sunucu_url"] = server_url
-                changed = True
-        elif db_path:
-            target_mod = "paylasim" if (db_path.startswith("\\\\") or db_path.startswith("//")) else "yerel"
-            if cfg.get("mod") != target_mod or cfg.get("db_yolu") != db_path:
-                cfg["mod"] = target_mod
-                cfg["db_yolu"] = db_path
-                changed = True
-        
-        if changed:
-            save_config(cfg)
-            mod_text = ("🌐 İstemci: " + cfg.get("sunucu_url","")) if cfg.get("mod") == "istemci" else "🖥 Yerel Mod"
-            self.lbl_conn_mode.config(text=mod_text)
-            
-        u = self.username_var.get()
+        u = self.username_var.get().strip()
         p = self.password_var.get()
 
         if is_client_mode():
