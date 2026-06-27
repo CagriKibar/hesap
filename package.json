@@ -30,6 +30,7 @@
   "build": {
     "appId": "com.hausmart.satistakip",
     "productName": "Hausmart Satis",
+    "asar": false,
     "directories": {
       "output": "dist"
     },
