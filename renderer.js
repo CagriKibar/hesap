@@ -363,6 +363,18 @@ document.addEventListener('DOMContentLoaded', () => {
     el.addEventListener('blur', saveRatesToDb);
   });
 
+  // Bakkal POS & Product Management
+  initPosBindings();
+  safeOn('btn-add-bakkal-product', 'click', openAddBakkalProductModal);
+  safeOn('btn-refresh-bakkal-products', 'click', refreshBakkalProductsTable);
+  safeOn('btn-save-bakkal-product', 'click', saveBakkalProduct);
+  const urunSearch = document.getElementById('urun-yonetimi-search');
+  if (urunSearch) {
+    let deb = null;
+    urunSearch.addEventListener('input', () => { clearTimeout(deb); deb = setTimeout(refreshBakkalProductsTable, 300); });
+  }
+  safeOn('urun-yonetimi-category', 'change', refreshBakkalProductsTable);
+
   setupTabEvents();
   setupCalculationTraces();
   setupModalEvents();
@@ -434,6 +446,11 @@ function setupTabEvents() {
         refreshServerSettingsTab();
       } else if (tabId === 'tab-hesapla') {
         loadPaymentRates();
+      } else if (tabId === 'tab-pos') {
+        posLoadProducts();
+        setTimeout(() => { const s = document.getElementById('pos-search'); if (s) s.focus(); }, 100);
+      } else if (tabId === 'tab-urun-yonetimi') {
+        refreshBakkalProductsTable();
       }
     });
   });
@@ -636,6 +653,20 @@ function setupRoleUIViews() {
   const navBtnKullanicilar = document.getElementById('nav-btn-kullanicilar');
   if (navBtnKullanicilar) {
     navBtnKullanicilar.classList.remove('hidden');
+  }
+
+  // Hızlı Satış (POS) tab: Visible for all roles
+  const navBtnPos = document.getElementById('nav-btn-pos');
+  if (navBtnPos) navBtnPos.classList.remove('hidden');
+
+  // Ürün Yönetimi tab: Visible only for Yönetici and Süper Admin
+  const navBtnUrunYonetimi = document.getElementById('nav-btn-urun-yonetimi');
+  if (navBtnUrunYonetimi) {
+    if (currentRole === 'Yönetici' || currentRole === 'Süper Admin') {
+      navBtnUrunYonetimi.classList.remove('hidden');
+    } else {
+      navBtnUrunYonetimi.classList.add('hidden');
+    }
   }
 
   // 2. Tab panels inputs/buttons disabling
@@ -2388,3 +2419,374 @@ window.handleRowDelete = async function(saleId) {
   selectedSaleRowId = saleId;
   await deleteSaleRecord();
 };
+
+// ==================== BAKKAL POS - HIZLI SATIŞ ====================
+let posCart = [];
+let posAllProducts = [];
+let posQRStream = null;
+let posQRDetectLoop = null;
+
+const CATEGORY_ICONS = {
+  'Temel Gıda': '🍞', 'Süt Ürünleri': '🥛', 'İçecekler': '🥤',
+  'Atıştırmalık': '🍫', 'Temizlik': '🧹', 'Kişisel Bakım': '🧴', 'Genel': '📦'
+};
+
+function initPosBindings() {
+  const searchEl = document.getElementById('pos-search');
+  if (searchEl) {
+    let debounce = null;
+    searchEl.addEventListener('input', () => {
+      clearTimeout(debounce);
+      debounce = setTimeout(() => posFilterProducts(), 200);
+    });
+    searchEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        posHandleBarcodeEnter(searchEl.value.trim());
+      }
+    });
+  }
+
+  safeOn('pos-category-filter', 'change', posFilterProducts);
+  safeOn('btn-pos-qr-scan', 'click', posToggleQRScanner);
+  safeOn('btn-pos-qr-close', 'click', posStopQRScanner);
+  safeOn('btn-pos-clear-cart', 'click', () => { posCart = []; posRenderCart(); });
+
+  document.querySelectorAll('.pos-pay-btn').forEach(btn => {
+    btn.addEventListener('click', () => posCompleteSale(btn.dataset.pay));
+  });
+}
+
+async function posLoadProducts() {
+  try {
+    posAllProducts = await window.api.getBakkalProducts('');
+  } catch (e) {
+    console.error('POS product load error:', e);
+    posAllProducts = [];
+  }
+  posFilterProducts();
+}
+
+function posFilterProducts() {
+  const search = (document.getElementById('pos-search').value || '').trim().toLowerCase();
+  const cat = document.getElementById('pos-category-filter').value;
+  let filtered = posAllProducts.filter(p => p.aktif !== 0);
+
+  if (cat) filtered = filtered.filter(p => p.kategori === cat);
+  if (search) filtered = filtered.filter(p =>
+    (p.urun_adi || '').toLowerCase().includes(search) ||
+    (p.barkod || '').toLowerCase().includes(search)
+  );
+
+  const grid = document.getElementById('pos-products-grid');
+  if (filtered.length === 0) {
+    grid.innerHTML = '<div class="pos-empty-state">Ürün bulunamadı</div>';
+    return;
+  }
+  grid.innerHTML = '';
+  filtered.forEach(p => {
+    const icon = CATEGORY_ICONS[p.kategori] || '📦';
+    const stockClass = p.stok_miktari <= 0 ? 'out-of-stock' : p.stok_miktari < 5 ? 'low-stock' : '';
+    const card = document.createElement('div');
+    card.className = `pos-product-card ${stockClass}`;
+    card.innerHTML = `
+      <span class="pos-prod-icon">${icon}</span>
+      <span class="pos-prod-name" title="${p.urun_adi}">${p.urun_adi}</span>
+      <span class="pos-prod-price">${formatMoney(p.satis_fiyati)} ₺</span>
+      <span class="pos-prod-stock">Stok: ${p.stok_miktari} ${p.birim}</span>
+    `;
+    card.addEventListener('click', () => posAddToCart(p));
+    grid.appendChild(card);
+  });
+}
+
+function posAddToCart(product) {
+  const existing = posCart.find(c => c.urun_id === product.id);
+  if (existing) {
+    existing.miktar++;
+    existing.toplam = existing.miktar * existing.birim_fiyat;
+  } else {
+    posCart.push({
+      urun_id: product.id,
+      urun_adi: product.urun_adi,
+      birim_fiyat: product.satis_fiyati,
+      miktar: 1,
+      toplam: product.satis_fiyati
+    });
+  }
+  posRenderCart();
+}
+
+async function posHandleBarcodeEnter(barcode) {
+  if (!barcode) return;
+  try {
+    const product = await window.api.getBakkalProductByBarcode(barcode);
+    if (product) {
+      posAddToCart(product);
+      document.getElementById('pos-search').value = '';
+    } else {
+      alert(`Barkod "${barcode}" ile eşleşen ürün bulunamadı.`);
+    }
+  } catch (e) {
+    alert(`Barkod arama hatası: ${e.message}`);
+  }
+}
+
+function posRenderCart() {
+  const container = document.getElementById('pos-cart-items');
+  const countEl = document.getElementById('pos-cart-count');
+  const totalEl = document.getElementById('pos-cart-total-amount');
+
+  const totalItems = posCart.reduce((s, c) => s + c.miktar, 0);
+  const totalAmount = posCart.reduce((s, c) => s + c.toplam, 0);
+  countEl.textContent = totalItems;
+  totalEl.textContent = `${formatMoney(totalAmount)} ₺`;
+
+  document.querySelectorAll('.pos-pay-btn').forEach(b => {
+    if (posCart.length === 0) b.setAttribute('disabled', 'true');
+    else b.removeAttribute('disabled');
+  });
+
+  if (posCart.length === 0) {
+    container.innerHTML = '<div class="pos-cart-empty">Sepet boş — ürün eklemek için tıklayın veya barkod okutun</div>';
+    return;
+  }
+
+  container.innerHTML = '';
+  posCart.forEach((item, idx) => {
+    const div = document.createElement('div');
+    div.className = 'pos-cart-item';
+    div.innerHTML = `
+      <div class="pos-cart-item-info">
+        <div class="pos-cart-item-name">${item.urun_adi}</div>
+        <div class="pos-cart-item-price">${formatMoney(item.birim_fiyat)} ₺ / adet</div>
+      </div>
+      <div class="pos-cart-item-qty">
+        <button class="pos-qty-btn" data-idx="${idx}" data-action="dec">−</button>
+        <span class="pos-qty-val">${item.miktar}</span>
+        <button class="pos-qty-btn" data-idx="${idx}" data-action="inc">+</button>
+      </div>
+      <div class="pos-cart-item-total">${formatMoney(item.toplam)} ₺</div>
+      <button class="pos-cart-item-del" data-idx="${idx}" title="Kaldır">✕</button>
+    `;
+    container.appendChild(div);
+  });
+
+  container.querySelectorAll('.pos-qty-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = parseInt(btn.dataset.idx);
+      if (btn.dataset.action === 'inc') {
+        posCart[idx].miktar++;
+      } else {
+        posCart[idx].miktar--;
+        if (posCart[idx].miktar <= 0) { posCart.splice(idx, 1); }
+      }
+      if (posCart[idx]) posCart[idx].toplam = posCart[idx].miktar * posCart[idx].birim_fiyat;
+      posRenderCart();
+    });
+  });
+
+  container.querySelectorAll('.pos-cart-item-del').forEach(btn => {
+    btn.addEventListener('click', () => {
+      posCart.splice(parseInt(btn.dataset.idx), 1);
+      posRenderCart();
+    });
+  });
+}
+
+async function posCompleteSale(paymentType) {
+  if (posCart.length === 0) return;
+  const totalAmount = posCart.reduce((s, c) => s + c.toplam, 0);
+
+  const saleData = {
+    tarih: getFormattedCurrentDateTime(),
+    kullanici: currentUser,
+    toplam_tutar: totalAmount,
+    odeme_turu: paymentType,
+    musteri_notu: '',
+    kalemler: posCart.map(c => ({
+      urun_id: c.urun_id,
+      urun_adi: c.urun_adi,
+      miktar: c.miktar,
+      birim_fiyat: c.birim_fiyat,
+      toplam: c.toplam
+    }))
+  };
+
+  try {
+    await window.api.createBakkalSale(saleData);
+    document.getElementById('pos-success-amount').textContent = `${formatMoney(totalAmount)} ₺`;
+    document.getElementById('pos-success-payment').textContent = paymentType;
+    document.getElementById('pos-success-items').textContent = `${posCart.reduce((s,c) => s + c.miktar, 0)} ürün`;
+    openModal('modal-pos-success');
+    posCart = [];
+    posRenderCart();
+    posLoadProducts();
+  } catch (e) {
+    alert(`Satış kaydedilemedi: ${e.message}`);
+  }
+}
+
+// QR / Barkod Kamera Tarama
+async function posToggleQRScanner() {
+  const area = document.getElementById('pos-qr-scanner-area');
+  if (!area.classList.contains('hidden')) {
+    posStopQRScanner();
+    return;
+  }
+  area.classList.remove('hidden');
+  const video = document.getElementById('pos-qr-video');
+  try {
+    posQRStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    video.srcObject = posQRStream;
+    if ('BarcodeDetector' in window) {
+      const detector = new BarcodeDetector({ formats: ['qr_code', 'ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e'] });
+      const detect = async () => {
+        if (!posQRStream) return;
+        try {
+          const barcodes = await detector.detect(video);
+          if (barcodes.length > 0) {
+            posStopQRScanner();
+            posHandleBarcodeEnter(barcodes[0].rawValue);
+            return;
+          }
+        } catch (e) {}
+        posQRDetectLoop = requestAnimationFrame(detect);
+      };
+      detect();
+    }
+  } catch (e) {
+    alert('Kamera erişimi sağlanamadı. Lütfen kamera izinlerini kontrol edin.');
+    posStopQRScanner();
+  }
+}
+
+function posStopQRScanner() {
+  if (posQRDetectLoop) { cancelAnimationFrame(posQRDetectLoop); posQRDetectLoop = null; }
+  if (posQRStream) { posQRStream.getTracks().forEach(t => t.stop()); posQRStream = null; }
+  const video = document.getElementById('pos-qr-video');
+  if (video) video.srcObject = null;
+  const area = document.getElementById('pos-qr-scanner-area');
+  if (area) area.classList.add('hidden');
+}
+
+// ==================== BAKKAL ÜRÜN YÖNETİMİ ====================
+async function refreshBakkalProductsTable() {
+  const search = (document.getElementById('urun-yonetimi-search').value || '').trim();
+  const cat = document.getElementById('urun-yonetimi-category').value;
+  const tbody = document.querySelector('#bakkal-products-table tbody');
+  tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;">Yükleniyor...</td></tr>';
+
+  try {
+    let list = await window.api.getBakkalProducts(search);
+    if (cat) list = list.filter(p => p.kategori === cat);
+    tbody.innerHTML = '';
+    if (list.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;">Ürün bulunamadı.</td></tr>';
+      return;
+    }
+    list.forEach(p => {
+      const tr = document.createElement('tr');
+      const stockClass = p.stok_miktari <= 0 ? 'style="color:#e74c3c;font-weight:700;"' : p.stok_miktari < 5 ? 'style="color:#e17055;font-weight:600;"' : '';
+      tr.innerHTML = `
+        <td>${p.id}</td>
+        <td>${p.barkod || '-'}</td>
+        <td><strong>${p.urun_adi}</strong></td>
+        <td>${p.kategori}</td>
+        <td class="manager-col">${formatMoney(p.alis_fiyati)} ₺</td>
+        <td><strong>${formatMoney(p.satis_fiyati)} ₺</strong></td>
+        <td ${stockClass}>${p.stok_miktari}</td>
+        <td>${p.birim}</td>
+        <td>
+          <div class="row-actions">
+            <button class="btn-action-icon btn-edit" title="Düzenle" onclick="event.stopPropagation(); openEditBakkalProduct(${p.id})">✏️</button>
+            <button class="btn-action-icon btn-delete" title="Sil" onclick="event.stopPropagation(); deleteBakkalProduct(${p.id}, '${p.urun_adi}')">🗑️</button>
+          </div>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--danger-color);">Hata: ${e.message}</td></tr>`;
+  }
+}
+
+function openAddBakkalProductModal() {
+  document.getElementById('bakkal-product-modal-title').textContent = 'Yeni Ürün Ekle';
+  document.getElementById('bakkal-prod-id').value = '';
+  document.getElementById('bakkal-prod-barkod').value = '';
+  document.getElementById('bakkal-prod-adi').value = '';
+  document.getElementById('bakkal-prod-kategori').value = 'Genel';
+  document.getElementById('bakkal-prod-birim').value = 'ADET';
+  document.getElementById('bakkal-prod-stok').value = '0';
+  document.getElementById('bakkal-prod-alis').value = '';
+  document.getElementById('bakkal-prod-satis').value = '';
+  openModal('modal-bakkal-product');
+}
+
+async function openEditBakkalProduct(pid) {
+  try {
+    const list = await window.api.getBakkalProducts('');
+    const p = list.find(x => x.id === pid);
+    if (!p) { alert('Ürün bulunamadı.'); return; }
+    document.getElementById('bakkal-product-modal-title').textContent = `Ürün Düzenle — ${p.urun_adi}`;
+    document.getElementById('bakkal-prod-id').value = p.id;
+    document.getElementById('bakkal-prod-barkod').value = p.barkod || '';
+    document.getElementById('bakkal-prod-adi').value = p.urun_adi;
+    document.getElementById('bakkal-prod-kategori').value = p.kategori || 'Genel';
+    document.getElementById('bakkal-prod-birim').value = p.birim || 'ADET';
+    document.getElementById('bakkal-prod-stok').value = p.stok_miktari || 0;
+    document.getElementById('bakkal-prod-alis').value = p.alis_fiyati || '';
+    document.getElementById('bakkal-prod-satis').value = p.satis_fiyati || '';
+    openModal('modal-bakkal-product');
+  } catch (e) {
+    alert('Ürün bilgileri yüklenemedi: ' + e.message);
+  }
+}
+window.openEditBakkalProduct = openEditBakkalProduct;
+
+async function saveBakkalProduct() {
+  const id = document.getElementById('bakkal-prod-id').value;
+  const urun_adi = document.getElementById('bakkal-prod-adi').value.trim();
+  const satis_fiyati = parseFloat(document.getElementById('bakkal-prod-satis').value.replace(',', '.')) || 0;
+
+  if (!urun_adi) { alert('Ürün adı zorunludur.'); return; }
+  if (satis_fiyati <= 0) { alert('Satış fiyatı 0\'dan büyük olmalıdır.'); return; }
+
+  const data = {
+    barkod: document.getElementById('bakkal-prod-barkod').value.trim() || null,
+    urun_adi: urun_adi,
+    kategori: document.getElementById('bakkal-prod-kategori').value,
+    birim: document.getElementById('bakkal-prod-birim').value,
+    stok_miktari: parseFloat(document.getElementById('bakkal-prod-stok').value.replace(',', '.')) || 0,
+    alis_fiyati: parseFloat(document.getElementById('bakkal-prod-alis').value.replace(',', '.')) || 0,
+    satis_fiyati: satis_fiyati
+  };
+
+  try {
+    if (id) {
+      await window.api.editBakkalProduct(parseInt(id), data);
+      alert('Ürün başarıyla güncellendi.');
+    } else {
+      await window.api.addBakkalProduct(data);
+      alert('Ürün başarıyla eklendi.');
+    }
+    closeAllModals();
+    refreshBakkalProductsTable();
+    posLoadProducts();
+  } catch (e) {
+    alert('Kaydetme hatası: ' + e.message);
+  }
+}
+
+async function deleteBakkalProduct(pid, name) {
+  if (!confirm(`"${name}" ürünü kalıcı olarak silinsin mi?`)) return;
+  try {
+    await window.api.deleteBakkalProduct(pid);
+    refreshBakkalProductsTable();
+    posLoadProducts();
+  } catch (e) {
+    alert('Silme hatası: ' + e.message);
+  }
+}
+window.deleteBakkalProduct = deleteBakkalProduct;

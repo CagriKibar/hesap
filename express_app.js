@@ -634,4 +634,133 @@ app.post('/api/ayarlar', (req, res) => {
   }
 });
 
+// ==================== BAKKAL (Grocery Store) Routes ====================
+
+// Bakkal: List active products
+app.get('/api/bakkal/urunler', (req, res) => {
+  try {
+    const search = req.query.search;
+    let rows;
+    if (search) {
+      rows = db.execQuery(
+        "SELECT * FROM bakkal_urunler WHERE aktif=1 AND (urun_adi LIKE ? OR barkod LIKE ?) ORDER BY urun_adi ASC",
+        [`%${search}%`, `%${search}%`]
+      );
+    } else {
+      rows = db.execQuery("SELECT * FROM bakkal_urunler WHERE aktif=1 ORDER BY urun_adi ASC");
+    }
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ hata: err.message });
+  }
+});
+
+// Bakkal: Find product by barkod
+app.get('/api/bakkal/urunler/barkod/:barkod', (req, res) => {
+  try {
+    const rows = db.execQuery(
+      "SELECT * FROM bakkal_urunler WHERE barkod=? AND aktif=1",
+      [req.params.barkod]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ hata: "Ürün bulunamadı" });
+    }
+    res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ hata: err.message });
+  }
+});
+
+// Bakkal: Create product
+app.post('/api/bakkal/urunler', (req, res) => {
+  const { barkod, urun_adi, kategori, alis_fiyati, satis_fiyati, stok_miktari, birim } = req.body;
+  try {
+    const lastId = db.execInsert(
+      "INSERT INTO bakkal_urunler (barkod, urun_adi, kategori, alis_fiyati, satis_fiyati, stok_miktari, birim, aktif) VALUES (?,?,?,?,?,?,?,1)",
+      [barkod, urun_adi, kategori, alis_fiyati, satis_fiyati, stok_miktari, birim]
+    );
+    res.status(201).json({ id: lastId });
+  } catch (err) {
+    res.status(500).json({ hata: err.message });
+  }
+});
+
+// Bakkal: Update product
+app.put('/api/bakkal/urunler/:id', (req, res) => {
+  const uid = parseInt(req.params.id);
+  const { barkod, urun_adi, kategori, alis_fiyati, satis_fiyati, stok_miktari, birim, aktif } = req.body;
+  try {
+    db.execRun(
+      "UPDATE bakkal_urunler SET barkod=?, urun_adi=?, kategori=?, alis_fiyati=?, satis_fiyati=?, stok_miktari=?, birim=?, aktif=? WHERE id=?",
+      [barkod, urun_adi, kategori, alis_fiyati, satis_fiyati, stok_miktari, birim, aktif, uid]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ hata: err.message });
+  }
+});
+
+// Bakkal: Delete product
+app.delete('/api/bakkal/urunler/:id', (req, res) => {
+  const uid = parseInt(req.params.id);
+  try {
+    db.execRun("DELETE FROM bakkal_urunler WHERE id=?", [uid]);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ hata: err.message });
+  }
+});
+
+// Bakkal: Create sale with kalemler
+app.post('/api/bakkal/satislar', (req, res) => {
+  const { tarih, kullanici, toplam_tutar, odeme_turu, musteri_notu, kalemler } = req.body;
+  try {
+    const satisId = db.execInsert(
+      "INSERT INTO bakkal_satislar (tarih, kullanici, toplam_tutar, odeme_turu, musteri_notu) VALUES (?,?,?,?,?)",
+      [tarih, kullanici, toplam_tutar, odeme_turu, musteri_notu]
+    );
+    if (kalemler && kalemler.length > 0) {
+      for (const k of kalemler) {
+        db.execInsert(
+          "INSERT INTO bakkal_satis_kalemleri (satis_id, urun_id, urun_adi, miktar, birim_fiyat, toplam) VALUES (?,?,?,?,?,?)",
+          [satisId, k.urun_id, k.urun_adi, k.miktar, k.birim_fiyat, k.toplam]
+        );
+        db.execRun(
+          "UPDATE bakkal_urunler SET stok_miktari = stok_miktari - ? WHERE id=?",
+          [k.miktar, k.urun_id]
+        );
+      }
+    }
+    res.status(201).json({ id: satisId });
+  } catch (err) {
+    res.status(500).json({ hata: err.message });
+  }
+});
+
+// Bakkal: List recent sales
+app.get('/api/bakkal/satislar', (req, res) => {
+  try {
+    const rows = db.execQuery("SELECT * FROM bakkal_satislar ORDER BY id DESC LIMIT 100");
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ hata: err.message });
+  }
+});
+
+// Bakkal: Get sale detail with kalemler
+app.get('/api/bakkal/satislar/:id', (req, res) => {
+  const sid = parseInt(req.params.id);
+  try {
+    const rows = db.execQuery("SELECT * FROM bakkal_satislar WHERE id=?", [sid]);
+    if (rows.length === 0) {
+      return res.status(404).json({ hata: "Satış bulunamadı" });
+    }
+    const satis = rows[0];
+    satis.kalemler = db.execQuery("SELECT * FROM bakkal_satis_kalemleri WHERE satis_id=?", [sid]);
+    res.json(satis);
+  } catch (err) {
+    res.status(500).json({ hata: err.message });
+  }
+});
+
 module.exports = app;

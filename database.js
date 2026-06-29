@@ -195,6 +195,47 @@ function createSchema() {
     )
   `);
 
+  // 4. Bakkal Products Table
+  dbInstance.run(`
+    CREATE TABLE IF NOT EXISTS bakkal_urunler (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      barkod TEXT UNIQUE,
+      urun_adi TEXT NOT NULL,
+      kategori TEXT DEFAULT 'Genel',
+      alis_fiyati REAL DEFAULT 0,
+      satis_fiyati REAL DEFAULT 0,
+      stok_miktari REAL DEFAULT 0,
+      birim TEXT DEFAULT 'ADET',
+      aktif INTEGER DEFAULT 1
+    )
+  `);
+
+  // 5. Bakkal Sales Table
+  dbInstance.run(`
+    CREATE TABLE IF NOT EXISTS bakkal_satislar (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tarih TEXT NOT NULL,
+      kullanici TEXT NOT NULL,
+      toplam_tutar REAL DEFAULT 0,
+      odeme_turu TEXT DEFAULT 'Nakit',
+      musteri_notu TEXT
+    )
+  `);
+
+  // 6. Bakkal Sale Items Table
+  dbInstance.run(`
+    CREATE TABLE IF NOT EXISTS bakkal_satis_kalemleri (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      satis_id INTEGER NOT NULL,
+      urun_id INTEGER,
+      urun_adi TEXT,
+      miktar REAL DEFAULT 1,
+      birim_fiyat REAL DEFAULT 0,
+      toplam REAL DEFAULT 0,
+      FOREIGN KEY (satis_id) REFERENCES bakkal_satislar(id) ON DELETE CASCADE
+    )
+  `);
+
   // Insert default users if table is empty
   const userCount = execQuery("SELECT COUNT(*) as count FROM kullanicilar")[0].count;
   if (userCount === 0) {

@@ -67,5 +67,17 @@ contextBridge.exposeInMainWorld('api', {
   checkForUpdate: () => ipcRenderer.invoke('check-for-update'),
   installUpdate: () => ipcRenderer.invoke('install-update'),
   relaunchApp: () => ipcRenderer.invoke('relaunch-app'),
-  editSale: (sid, saleData) => ipcRenderer.invoke('edit-sale', { sid, saleData })
+  editSale: (sid, saleData) => ipcRenderer.invoke('edit-sale', { sid, saleData }),
+
+  // Bakkal - Product Management
+  getBakkalProducts: (search) => ipcRenderer.invoke('get-bakkal-products', search),
+  getBakkalProductByBarcode: (barcode) => ipcRenderer.invoke('get-bakkal-product-by-barcode', barcode),
+  addBakkalProduct: (data) => ipcRenderer.invoke('add-bakkal-product', data),
+  editBakkalProduct: (id, data) => ipcRenderer.invoke('edit-bakkal-product', { id, data }),
+  deleteBakkalProduct: (id) => ipcRenderer.invoke('delete-bakkal-product', id),
+
+  // Bakkal - POS Sales
+  createBakkalSale: (data) => ipcRenderer.invoke('create-bakkal-sale', data),
+  getBakkalSales: () => ipcRenderer.invoke('get-bakkal-sales'),
+  getBakkalSaleDetails: (id) => ipcRenderer.invoke('get-bakkal-sale-details', id)
 });

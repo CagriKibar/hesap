@@ -2276,3 +2276,107 @@ function generatePdfDetailReport(filePath, sale) {
     stream.on('error', (e) => reject(e));
   });
 }
+
+// ===================== Bakkal (Grocery) IPC Handlers =====================
+
+ipcMain.handle('get-bakkal-products', async (event, search) => {
+  const cfg = loadConfigSync();
+  if (cfg.mod === 'istemci') {
+    return await apiCall('get', `/api/bakkal/urunler${search ? '?search=' + encodeURIComponent(search) : ''}`);
+  } else {
+    if (search) {
+      const like = `%${search}%`;
+      return db.execQuery("SELECT * FROM bakkal_urunler WHERE aktif=1 AND (urun_adi LIKE ? OR barkod LIKE ?) ORDER BY urun_adi ASC", [like, like]);
+    } else {
+      return db.execQuery("SELECT * FROM bakkal_urunler WHERE aktif=1 ORDER BY urun_adi ASC");
+    }
+  }
+});
+
+ipcMain.handle('get-bakkal-product-by-barcode', async (event, barcode) => {
+  const cfg = loadConfigSync();
+  if (cfg.mod === 'istemci') {
+    return await apiCall('get', `/api/bakkal/urunler/barkod/${encodeURIComponent(barcode)}`);
+  } else {
+    const rows = db.execQuery("SELECT * FROM bakkal_urunler WHERE barkod=?", [barcode]);
+    return rows.length > 0 ? rows[0] : null;
+  }
+});
+
+ipcMain.handle('add-bakkal-product', async (event, data) => {
+  const cfg = loadConfigSync();
+  if (cfg.mod === 'istemci') {
+    return await apiCall('post', '/api/bakkal/urunler', data);
+  } else {
+    const lastId = db.execInsert(
+      "INSERT INTO bakkal_urunler (barkod, urun_adi, kategori, alis_fiyati, satis_fiyati, stok_miktari, birim, aktif) VALUES (?,?,?,?,?,?,?,1)",
+      [data.barkod, data.urun_adi, data.kategori, data.alis_fiyati, data.satis_fiyati, data.stok_miktari, data.birim]
+    );
+    return { id: lastId };
+  }
+});
+
+ipcMain.handle('edit-bakkal-product', async (event, { id, data }) => {
+  const cfg = loadConfigSync();
+  if (cfg.mod === 'istemci') {
+    return await apiCall('put', `/api/bakkal/urunler/${id}`, data);
+  } else {
+    db.execRun(
+      "UPDATE bakkal_urunler SET barkod=?, urun_adi=?, kategori=?, alis_fiyati=?, satis_fiyati=?, stok_miktari=?, birim=? WHERE id=?",
+      [data.barkod, data.urun_adi, data.kategori, data.alis_fiyati, data.satis_fiyati, data.stok_miktari, data.birim, id]
+    );
+    return { ok: true };
+  }
+});
+
+ipcMain.handle('delete-bakkal-product', async (event, id) => {
+  const cfg = loadConfigSync();
+  if (cfg.mod === 'istemci') {
+    return await apiCall('delete', `/api/bakkal/urunler/${id}`);
+  } else {
+    db.execRun("DELETE FROM bakkal_urunler WHERE id=?", [id]);
+    return { ok: true };
+  }
+});
+
+ipcMain.handle('create-bakkal-sale', async (event, data) => {
+  const cfg = loadConfigSync();
+  if (cfg.mod === 'istemci') {
+    return await apiCall('post', '/api/bakkal/satislar', data);
+  } else {
+    const lastId = db.execInsert(
+      "INSERT INTO bakkal_satislar (tarih, kullanici, toplam_tutar, odeme_turu, musteri_notu) VALUES (?,?,?,?,?)",
+      [data.tarih, data.kullanici, data.toplam_tutar, data.odeme_turu, data.musteri_notu || '']
+    );
+    for (const k of data.kalemler) {
+      db.execInsert(
+        "INSERT INTO bakkal_satis_kalemleri (satis_id, urun_id, urun_adi, miktar, birim_fiyat, toplam) VALUES (?,?,?,?,?,?)",
+        [lastId, k.urun_id, k.urun_adi, k.miktar, k.birim_fiyat, k.toplam]
+      );
+      db.execRun("UPDATE bakkal_urunler SET stok_miktari = stok_miktari - ? WHERE id=?", [k.miktar, k.urun_id]);
+    }
+    return { id: lastId };
+  }
+});
+
+ipcMain.handle('get-bakkal-sales', async () => {
+  const cfg = loadConfigSync();
+  if (cfg.mod === 'istemci') {
+    return await apiCall('get', '/api/bakkal/satislar');
+  } else {
+    return db.execQuery("SELECT * FROM bakkal_satislar ORDER BY id DESC LIMIT 100");
+  }
+});
+
+ipcMain.handle('get-bakkal-sale-details', async (event, id) => {
+  const cfg = loadConfigSync();
+  if (cfg.mod === 'istemci') {
+    return await apiCall('get', `/api/bakkal/satislar/${id}`);
+  } else {
+    const rows = db.execQuery("SELECT * FROM bakkal_satislar WHERE id=?", [id]);
+    if (rows.length === 0) throw new Error("Satış bulunamadı.");
+    const sale = rows[0];
+    sale.kalemler = db.execQuery("SELECT * FROM bakkal_satis_kalemleri WHERE satis_id=?", [id]);
+    return sale;
+  }
+});

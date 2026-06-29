@@ -55,7 +55,7 @@
           <a href="#" id="link-signature-login" class="signature-link">Kuisoft</a>
         </div>
         <div style="font-size: 0.8rem; color: var(--text-secondary); text-align: center; margin-top: 5px;" id="app-version-text">
-          Sürüm: v1.2.9
+          Sürüm: v1.3.0
         </div>
       </div>
     </div>
@@ -79,6 +79,8 @@
         <button class="tab-link active" data-tab="tab-hesapla">Fiyat Hesaplama ve Satış</button>
         <button class="tab-link" data-tab="tab-hareketler">Son Hareketler & İrsaliye</button>
         <button class="tab-link" data-tab="tab-gecmis">Ürün Fiyat Geçmişi</button>
+        <button class="tab-link hidden" id="nav-btn-pos" data-tab="tab-pos">Hızlı Satış</button>
+        <button class="tab-link hidden" id="nav-btn-urun-yonetimi" data-tab="tab-urun-yonetimi">Ürün Yönetimi</button>
         <button class="tab-link hidden" id="nav-btn-kullanicilar" data-tab="tab-kullanicilar">⚙ Kullanıcı Yönetimi</button>
         <button class="tab-link hidden" id="nav-btn-sunucu" data-tab="tab-sunucu">Sunucu Yönetimi</button>
       </nav>
@@ -597,6 +599,115 @@
 
         </div>
       </section>
+
+      <!-- SEKME 6: HIZLI SATIŞ (POS) -->
+      <section id="tab-pos" class="tab-panel">
+        <div class="pos-layout">
+          <!-- Sol: Ürün Arama & Grid -->
+          <div class="pos-products-side">
+            <div class="pos-search-bar">
+              <input type="text" id="pos-search" class="pos-search-input" placeholder="Barkod okut veya ürün ara..." autofocus>
+              <button id="btn-pos-qr-scan" class="btn btn-primary pos-scan-btn" title="Kamera ile QR/Barkod Tara">📷</button>
+              <select id="pos-category-filter" class="pos-category-select">
+                <option value="">Tüm Kategoriler</option>
+                <option value="Temel Gıda">Temel Gıda</option>
+                <option value="Süt Ürünleri">Süt Ürünleri</option>
+                <option value="İçecekler">İçecekler</option>
+                <option value="Atıştırmalık">Atıştırmalık</option>
+                <option value="Temizlik">Temizlik</option>
+                <option value="Kişisel Bakım">Kişisel Bakım</option>
+                <option value="Genel">Genel</option>
+              </select>
+            </div>
+
+            <!-- QR Kamera Alanı -->
+            <div id="pos-qr-scanner-area" class="pos-qr-scanner hidden">
+              <video id="pos-qr-video" autoplay playsinline></video>
+              <div class="pos-qr-overlay">
+                <div class="pos-qr-frame"></div>
+              </div>
+              <button id="btn-pos-qr-close" class="btn btn-danger pos-qr-close-btn">Kamerayı Kapat</button>
+            </div>
+
+            <!-- Ürün Grid -->
+            <div id="pos-products-grid" class="pos-products-grid">
+              <div class="pos-empty-state">Ürün yüklemek için arama yapın veya kategori seçin...</div>
+            </div>
+          </div>
+
+          <!-- Sağ: Sepet -->
+          <div class="pos-cart-side">
+            <div class="pos-cart-header">
+              <h3>🛒 Sepet</h3>
+              <span id="pos-cart-count" class="pos-cart-badge">0</span>
+            </div>
+            <div id="pos-cart-items" class="pos-cart-items">
+              <div class="pos-cart-empty">Sepet boş — ürün eklemek için tıklayın veya barkod okutun</div>
+            </div>
+            <div class="pos-cart-footer">
+              <div class="pos-cart-total">
+                <span>TOPLAM</span>
+                <span id="pos-cart-total-amount" class="pos-total-amount">0,00 ₺</span>
+              </div>
+              <div class="pos-payment-buttons">
+                <button class="pos-pay-btn pos-pay-cash" data-pay="Nakit">💵 Nakit</button>
+                <button class="pos-pay-btn pos-pay-card" data-pay="Kredi Kartı">💳 Kart</button>
+                <button class="pos-pay-btn pos-pay-veresiye" data-pay="Veresiye">📋 Veresiye</button>
+              </div>
+              <button id="btn-pos-clear-cart" class="btn btn-outline pos-clear-btn">🗑 Sepeti Temizle</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SEKME 7: ÜRÜN YÖNETİMİ -->
+      <section id="tab-urun-yonetimi" class="tab-panel">
+        <div class="card">
+          <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+            <h3>Ürün Kataloğu</h3>
+            <div class="flex-row gap-5">
+              <button id="btn-add-bakkal-product" class="btn btn-success">+ Yeni Ürün Ekle</button>
+              <button id="btn-refresh-bakkal-products" class="btn btn-outline">🔄 Yenile</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="flex-row gap-10" style="margin-bottom:12px;">
+              <input type="text" id="urun-yonetimi-search" placeholder="Ürün adı veya barkod ile ara..." style="flex:1;">
+              <select id="urun-yonetimi-category" style="width:180px;">
+                <option value="">Tüm Kategoriler</option>
+                <option value="Temel Gıda">Temel Gıda</option>
+                <option value="Süt Ürünleri">Süt Ürünleri</option>
+                <option value="İçecekler">İçecekler</option>
+                <option value="Atıştırmalık">Atıştırmalık</option>
+                <option value="Temizlik">Temizlik</option>
+                <option value="Kişisel Bakım">Kişisel Bakım</option>
+                <option value="Genel">Genel</option>
+              </select>
+            </div>
+            <div style="overflow-x:auto;">
+              <table id="bakkal-products-table" class="data-table">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Barkod</th>
+                    <th>Ürün Adı</th>
+                    <th>Kategori</th>
+                    <th class="manager-col">Alış ₺</th>
+                    <th>Satış ₺</th>
+                    <th>Stok</th>
+                    <th>Birim</th>
+                    <th>İşlem</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr><td colspan="9" style="text-align:center;">Yükleniyor...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
     </main>
     <footer class="app-footer">
       <span>Hausmart Fiyatlandırma & Satış Takip Sistemi</span>
@@ -1026,6 +1137,89 @@
     <div class="modal-footer">
       <button class="btn btn-outline btn-close-modal">İptal</button>
       <button id="btn-save-deliver-sale" class="btn btn-success">Teslim Et</button>
+    </div>
+  </div>
+
+  <!-- 8. BAKKAL ÜRÜN EKLE/DÜZENLE MODAL -->
+  <div id="modal-bakkal-product" class="modal-card hidden" style="width:520px;">
+    <div class="modal-header">
+      <h3 id="bakkal-product-modal-title">Yeni Ürün Ekle</h3>
+      <button class="btn-close-modal">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="bakkal-prod-id">
+      <div class="form-row">
+        <div class="form-group col-6">
+          <label for="bakkal-prod-barkod">Barkod / QR Kodu</label>
+          <div class="flex-row gap-5">
+            <input type="text" id="bakkal-prod-barkod" placeholder="Barkod numarası" style="flex:1;">
+            <button id="btn-bakkal-prod-scan" class="btn btn-outline btn-sm" title="Kamera ile oku">📷</button>
+          </div>
+        </div>
+        <div class="form-group col-6">
+          <label for="bakkal-prod-adi">Ürün Adı *</label>
+          <input type="text" id="bakkal-prod-adi" placeholder="Ürün adını girin" required>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group col-4">
+          <label for="bakkal-prod-kategori">Kategori</label>
+          <select id="bakkal-prod-kategori">
+            <option value="Genel">Genel</option>
+            <option value="Temel Gıda">Temel Gıda</option>
+            <option value="Süt Ürünleri">Süt Ürünleri</option>
+            <option value="İçecekler">İçecekler</option>
+            <option value="Atıştırmalık">Atıştırmalık</option>
+            <option value="Temizlik">Temizlik</option>
+            <option value="Kişisel Bakım">Kişisel Bakım</option>
+          </select>
+        </div>
+        <div class="form-group col-4">
+          <label for="bakkal-prod-birim">Birim</label>
+          <select id="bakkal-prod-birim">
+            <option value="ADET">ADET</option>
+            <option value="KG">KG</option>
+            <option value="LT">LT</option>
+            <option value="PAKET">PAKET</option>
+            <option value="KOLI">KOLI</option>
+          </select>
+        </div>
+        <div class="form-group col-4">
+          <label for="bakkal-prod-stok">Stok Miktarı</label>
+          <input type="text" id="bakkal-prod-stok" placeholder="0" value="0">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group col-6">
+          <label for="bakkal-prod-alis">Alış Fiyatı (₺)</label>
+          <input type="text" id="bakkal-prod-alis" placeholder="0.00">
+        </div>
+        <div class="form-group col-6">
+          <label for="bakkal-prod-satis">Satış Fiyatı (₺) *</label>
+          <input type="text" id="bakkal-prod-satis" placeholder="0.00" required>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline btn-close-modal">İptal</button>
+      <button id="btn-save-bakkal-product" class="btn btn-success">Kaydet</button>
+    </div>
+  </div>
+
+  <!-- 9. POS SATIŞ TAMAMLANDI MODAL -->
+  <div id="modal-pos-success" class="modal-card hidden" style="width:380px;">
+    <div class="modal-header" style="background:linear-gradient(135deg,#00b894,#00cec9);">
+      <h3 style="color:#fff;">Satış Tamamlandı!</h3>
+      <button class="btn-close-modal" style="color:#fff;">&times;</button>
+    </div>
+    <div class="modal-body" style="text-align:center; padding:30px;">
+      <div style="font-size:3rem; margin-bottom:10px;">✅</div>
+      <div style="font-size:1.4rem; font-weight:700; margin-bottom:5px;" id="pos-success-amount">0,00 ₺</div>
+      <div style="color:var(--text-secondary);" id="pos-success-payment">Nakit</div>
+      <div style="color:var(--text-secondary); font-size:0.85rem; margin-top:5px;" id="pos-success-items">0 ürün</div>
+    </div>
+    <div class="modal-footer" style="justify-content:center;">
+      <button class="btn btn-primary btn-close-modal" style="min-width:160px;">Tamam</button>
     </div>
   </div>
 
