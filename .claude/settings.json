@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx electron *)",
+      "PowerShell($nodePath = \"c:\\\\Users\\\\User\\\\Desktop\\\\HESAPLA\\\\node_temp\\\\node-v20.11.1-win-x64\"; $env:PATH = \"$nodePath;$env:PATH\"; Set-Location \"c:\\\\Users\\\\User\\\\Desktop\\\\HESAPLA\"; npx electron . --enable-logging 2>&1 | Select-Object -First 30)",
+      "Bash(node -c \"c:\\\\Users\\\\User\\\\Desktop\\\\HESAPLA\\\\renderer.js\")",
+      "PowerShell($nodePath = \"c:\\\\Users\\\\User\\\\Desktop\\\\HESAPLA\\\\node_temp\\\\node-v20.11.1-win-x64\"; $env:PATH = \"$nodePath;$env:PATH\"; node -c \"c:\\\\Users\\\\User\\\\Desktop\\\\HESAPLA\\\\renderer.js\"; node -c \"c:\\\\Users\\\\User\\\\Desktop\\\\HESAPLA\\\\main.js\"; node -c \"c:\\\\Users\\\\User\\\\Desktop\\\\HESAPLA\\\\preload.js\")",
+      "PowerShell($nodePath = \"c:\\\\Users\\\\User\\\\Desktop\\\\HESAPLA\\\\node_temp\\\\node-v20.11.1-win-x64\"; $env:PATH = \"$nodePath;$env:PATH\"; Set-Location \"c:\\\\Users\\\\User\\\\Desktop\\\\HESAPLA\"; node -v; npm -v)",
+      "PowerShell($nodePath = \"c:\\\\Users\\\\User\\\\Desktop\\\\HESAPLA\\\\node_temp\\\\node-v20.11.1-win-x64\"; $env:PATH = \"$nodePath;$env:PATH\"; Set-Location \"c:\\\\Users\\\\User\\\\Desktop\\\\HESAPLA\"; if \\(Test-Path \"dist\"\\) { Remove-Item -Recurse -Force \"dist\" }; Write-Output \"dist klasoru temizlendi\")",
+      "PowerShell($nodePath = \"c:\\\\Users\\\\User\\\\Desktop\\\\HESAPLA\\\\node_temp\\\\node-v20.11.1-win-x64\"; $env:PATH = \"$nodePath;$env:PATH\"; Set-Location \"c:\\\\Users\\\\User\\\\Desktop\\\\HESAPLA\"; npm run build 2>&1)",
+      "Bash(git add *)",
+      "Bash(git rm *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "PowerShell($nodePath = \"c:\\\\Users\\\\User\\\\Desktop\\\\HESAPLA\\\\node_temp\\\\node-v20.11.1-win-x64\"; $env:PATH = \"$nodePath;$env:PATH\"; node -c \"c:\\\\Users\\\\User\\\\Desktop\\\\HESAPLA\\\\renderer.js\"; node -c \"c:\\\\Users\\\\User\\\\Desktop\\\\HESAPLA\\\\main.js\"; node -c \"c:\\\\Users\\\\User\\\\Desktop\\\\HESAPLA\\\\preload.js\"; node -c \"c:\\\\Users\\\\User\\\\Desktop\\\\HESAPLA\\\\express_app.js\"; node -c \"c:\\\\Users\\\\User\\\\Desktop\\\\HESAPLA\\\\database.js\"; Write-Output \"ALL SYNTAX OK\")",
+      "PowerShell($nodePath = \"c:\\\\Users\\\\User\\\\Desktop\\\\HESAPLA\\\\node_temp\\\\node-v20.11.1-win-x64\"; $env:PATH = \"$nodePath;$env:PATH\"; Set-Location \"c:\\\\Users\\\\User\\\\Desktop\\\\HESAPLA\"; if \\(Test-Path \"dist\"\\) { Remove-Item -Recurse -Force \"dist\" }; npm run build 2>&1)"
+    ]
+  }
+}

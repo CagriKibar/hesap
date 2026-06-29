@@ -637,93 +637,84 @@ function handleLogout() {
   document.getElementById('login-container').classList.remove('hidden');
 }
 
+function isAdmin() {
+  return currentRole === 'Yönetici' || currentRole === 'Süper Admin';
+}
+
 function setupRoleUIViews() {
-  // 1. Tab visibility
-  // Sunucu Yönetimi tab button: Hidden for everyone except Süper Admin
-  const navBtnSunucu = document.getElementById('nav-btn-sunucu');
-  if (navBtnSunucu) {
-    if (currentRole === 'Süper Admin') {
-      navBtnSunucu.classList.remove('hidden');
-    } else {
-      navBtnSunucu.classList.add('hidden');
-    }
-  }
+  const admin = isAdmin();
+  const superAdmin = currentRole === 'Süper Admin';
 
-  // Kullanıcı Yönetimi tab button: Visible for all logged-in roles
-  const navBtnKullanicilar = document.getElementById('nav-btn-kullanicilar');
-  if (navBtnKullanicilar) {
-    navBtnKullanicilar.classList.remove('hidden');
-  }
+  // === TAB VISIBILITY ===
+  const showTab = (id, visible) => {
+    const el = document.getElementById(id);
+    if (el) { if (visible) el.classList.remove('hidden'); else el.classList.add('hidden'); }
+  };
 
-  // Hızlı Satış (POS) tab: Visible for all roles
-  const navBtnPos = document.getElementById('nav-btn-pos');
-  if (navBtnPos) navBtnPos.classList.remove('hidden');
+  showTab('nav-btn-pos', true);
+  showTab('nav-btn-kullanicilar', admin);
+  showTab('nav-btn-urun-yonetimi', admin);
+  showTab('nav-btn-sunucu', superAdmin);
 
-  // Ürün Yönetimi tab: Visible only for Yönetici and Süper Admin
-  const navBtnUrunYonetimi = document.getElementById('nav-btn-urun-yonetimi');
-  if (navBtnUrunYonetimi) {
-    if (currentRole === 'Yönetici' || currentRole === 'Süper Admin') {
-      navBtnUrunYonetimi.classList.remove('hidden');
-    } else {
-      navBtnUrunYonetimi.classList.add('hidden');
-    }
-  }
+  // === SUNUCU TAB: Only Süper Admin ===
+  document.querySelectorAll('#tab-sunucu input, #tab-sunucu select, #tab-sunucu button').forEach(el => {
+    if (superAdmin) el.removeAttribute('disabled'); else el.setAttribute('disabled', 'true');
+  });
 
-  // 2. Tab panels inputs/buttons disabling
-  // Sunucu Yönetimi tab inputs: enabled only for Süper Admin
-  const sunucuInputs = document.querySelectorAll('#tab-sunucu input, #tab-sunucu select, #tab-sunucu button');
-  if (currentRole === 'Süper Admin') {
-    sunucuInputs.forEach(el => el.removeAttribute('disabled'));
-  } else {
-    sunucuInputs.forEach(el => el.setAttribute('disabled', 'true'));
-  }
+  // === KULLANICI YÖNETİMİ: Only admin roles ===
+  const userMgmtBtns = ['btn-add-user', 'btn-edit-user', 'btn-reset-password', 'btn-toggle-user', 'btn-delete-user'];
+  userMgmtBtns.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { if (admin) { el.classList.remove('hidden'); el.removeAttribute('disabled'); } else { el.classList.add('hidden'); } }
+  });
+  ['#modal-add-user', '#modal-edit-user', '#modal-reset-password'].forEach(sel => {
+    document.querySelectorAll(`${sel} input, ${sel} select, ${sel} button`).forEach(el => {
+      if (admin) el.removeAttribute('disabled'); else el.setAttribute('disabled', 'true');
+    });
+  });
 
-  // 3. tab-kullanicilar elements based on role (fully enabled for all roles)
-  const btnAddUser = document.getElementById('btn-add-user');
-  const btnToggleUser = document.getElementById('btn-toggle-user');
-  const btnDeleteUser = document.getElementById('btn-delete-user');
-  
-  if (btnAddUser) btnAddUser.classList.remove('hidden');
-  if (btnToggleUser) btnToggleUser.classList.remove('hidden');
-  if (btnDeleteUser) btnDeleteUser.classList.remove('hidden');
+  // === BAĞLANTI AYARLARI: Admin roles only ===
+  document.querySelectorAll('#modal-conn-settings input, #modal-conn-settings button, #modal-conn-settings select').forEach(el => {
+    if (admin) el.removeAttribute('disabled'); else el.setAttribute('disabled', 'true');
+  });
+  const connBtn = document.getElementById('server-btn-change-conn');
+  if (connBtn) { if (admin) connBtn.removeAttribute('disabled'); else connBtn.setAttribute('disabled', 'true'); }
 
-  const usersTabInputs = document.querySelectorAll('#tab-kullanicilar input, #tab-kullanicilar select, #tab-kullanicilar button');
-  usersTabInputs.forEach(el => el.removeAttribute('disabled'));
+  // === ALIS FİYATI, KÂR, MANAGER KOLONLARI: Only admin ===
+  document.querySelectorAll('.manager-only').forEach(el => {
+    if (admin) el.classList.remove('hidden'); else el.classList.add('hidden');
+  });
+  document.querySelectorAll('.manager-col').forEach(el => {
+    if (admin) el.classList.remove('hidden'); else el.classList.add('hidden');
+  });
 
-  // 4. Modals inputs/buttons disabling (fully enabled for all roles)
-  const addUserModalInputs = document.querySelectorAll('#modal-add-user input, #modal-add-user select, #modal-add-user button');
-  addUserModalInputs.forEach(el => el.removeAttribute('disabled'));
-
-  const editUserModalInputs = document.querySelectorAll('#modal-edit-user input, #modal-edit-user select, #modal-edit-user button');
-  editUserModalInputs.forEach(el => el.removeAttribute('disabled'));
-
-  const resetPasswordModalInputs = document.querySelectorAll('#modal-reset-password input, #modal-reset-password button');
-  resetPasswordModalInputs.forEach(el => el.removeAttribute('disabled'));
-
-  // Connection settings modal: unlocked for all roles so anyone can edit DB path or IP
-  const connSettingsInputs = document.querySelectorAll('#modal-conn-settings input, #modal-conn-settings button, #modal-conn-settings select');
-  connSettingsInputs.forEach(el => el.removeAttribute('disabled'));
-
-  // 5. Pricing & Sales fields permissions (payment rates inputs are now enabled for everyone so they can be edited)
-  document.querySelectorAll('.manager-only').forEach(el => el.classList.remove('hidden'));
-  document.querySelectorAll('.manager-col').forEach(el => el.classList.remove('hidden'));
-  
   const purchasePriceInput = document.getElementById('purchase-price');
   const purchasePriceType = document.getElementById('purchase-price-type');
+  if (purchasePriceInput) { if (admin) purchasePriceInput.removeAttribute('disabled'); else { purchasePriceInput.setAttribute('disabled', 'true'); purchasePriceInput.value = ''; } }
+  if (purchasePriceType) { if (admin) purchasePriceType.removeAttribute('disabled'); else purchasePriceType.setAttribute('disabled', 'true'); }
+
+  // === ÖDEME ORANLARI: Only admin can edit ===
+  document.querySelectorAll('.rate-input').forEach(el => {
+    if (admin) el.removeAttribute('disabled'); else el.setAttribute('disabled', 'true');
+  });
+
+  // === SATIŞ SİLME: Only admin ===
   const deleteSaleBtn = document.getElementById('btn-delete-sale');
-  
-  if (purchasePriceInput) purchasePriceInput.removeAttribute('disabled');
-  if (purchasePriceType) purchasePriceType.removeAttribute('disabled');
-  
-  // Everyone (including Personel) can edit base rates now as requested
-  document.querySelectorAll('.rate-input').forEach(el => el.removeAttribute('disabled'));
-  
-  if (currentRole === 'Yönetici' || currentRole === 'Süper Admin') {
-    if (deleteSaleBtn) deleteSaleBtn.removeAttribute('disabled');
-  } else {
-    // Personel Mod
-    if (deleteSaleBtn) deleteSaleBtn.setAttribute('disabled', 'true');
-  }
+  if (deleteSaleBtn) { if (admin) deleteSaleBtn.removeAttribute('disabled'); else deleteSaleBtn.setAttribute('disabled', 'true'); }
+
+  // === SATIŞ DÜZENLEME: Only admin ===
+  const editSaleBtn = document.getElementById('btn-edit-sale');
+  if (editSaleBtn) { if (admin) editSaleBtn.removeAttribute('disabled'); else editSaleBtn.setAttribute('disabled', 'true'); }
+
+  // === NAKLİYE / İNDİRME MALİYETLERİ: Only admin ===
+  ['shipping-cost', 'unloading-cost', 'has-shipping', 'has-unloading'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { if (admin) el.removeAttribute('disabled'); else el.setAttribute('disabled', 'true'); }
+  });
+
+  // === BAKKAL ÜRÜN YÖNETİMİ BUTONLARI: Only admin ===
+  const addProdBtn = document.getElementById('btn-add-bakkal-product');
+  if (addProdBtn) { if (admin) addProdBtn.classList.remove('hidden'); else addProdBtn.classList.add('hidden'); }
 }
 
 // ==================== TAB 1: PRICING CALCULATION ====================
@@ -907,7 +898,7 @@ function runCumulativePriceCalculation() {
       <td>%${finalAppliedRate.toFixed(2)}</td>
       <td>${unitPriceText}</td>
       <td>${formatMoney(totalFinalPrice)} ₺</td>
-      <td class="manager-col ${currentRole ? '' : 'hidden'}">${profitText}</td>
+      <td class="manager-col ${isAdmin() ? '' : 'hidden'}">${profitText}</td>
     `;
     tableBody.appendChild(tr);
   });
@@ -1256,7 +1247,7 @@ function renderAddedProductsTable() {
       <td>${p.urun_adi}</td>
       <td>${p.miktar}</td>
       <td>${p.birim}</td>
-      <td class="manager-col ${currentRole ? '' : 'hidden'}">${purPriceText}</td>
+      <td class="manager-col ${isAdmin() ? '' : 'hidden'}">${purPriceText}</td>
       <td>${formatMoney(p.baz_satis_fiyati)} ₺/${p.fiyat_birimi}</td>
       <td>${p.irsaliye_no || '-'}</td>
       <td style="text-align: center;">
@@ -1315,14 +1306,14 @@ async function refreshSalesTable() {
         <td>${sale.miktar}</td>
         <td>${sale.birim}</td>
         <td>${formatMoney(sale.toplam_tutar)} ₺</td>
-        <td class="manager-col ${currentRole ? '' : 'hidden'}">${profitText}</td>
+        <td class="manager-col ${isAdmin() ? '' : 'hidden'}">${profitText}</td>
         <td>${doc_status}</td>
         <td>
           <div class="row-actions">
             <button class="btn-action-icon btn-detail" title="Detay Gör" onclick="event.stopPropagation(); handleRowViewDetail(${sale.id})">🔍</button>
-            <button class="btn-action-icon btn-edit" title="Satışı Düzenle" onclick="event.stopPropagation(); handleRowEdit(${sale.id})">✏️</button>
+            <button class="btn-action-icon btn-edit ${isAdmin() ? '' : 'hidden'}" title="Satışı Düzenle" onclick="event.stopPropagation(); handleRowEdit(${sale.id})">✏️</button>
             <button class="btn-action-icon btn-waybill" title="İrsaliye Ekle/Gör" onclick="event.stopPropagation(); handleRowWaybill(${sale.id}, '${sale.irsaliye_yolu ? '1' : '0'}')">📁</button>
-            <button class="btn-action-icon btn-delete ${currentRole === 'Personel' ? 'hidden' : ''}" title="Satışı Sil" onclick="event.stopPropagation(); handleRowDelete(${sale.id})">🗑️</button>
+            <button class="btn-action-icon btn-delete ${isAdmin() ? '' : 'hidden'}" title="Satışı Sil" onclick="event.stopPropagation(); handleRowDelete(${sale.id})">🗑️</button>
           </div>
         </td>
       `;
@@ -1533,7 +1524,7 @@ function renderEditSaleProductsTable() {
       <td>${p.urun_adi}</td>
       <td>${p.miktar}</td>
       <td>${p.birim}</td>
-      <td class="manager-col ${currentRole ? '' : 'hidden'}">${purPriceText}</td>
+      <td class="manager-col ${isAdmin() ? '' : 'hidden'}">${purPriceText}</td>
       <td>${formatMoney(p.baz_satis_fiyati)} ₺/${p.fiyat_birimi}</td>
       <td>${p.irsaliye_no || '-'}</td>
       <td style="text-align: center;">
@@ -1729,7 +1720,7 @@ async function viewSaleDetail() {
     document.getElementById('det-toplam').textContent = `${formatMoney(sale.toplam_tutar)} ₺`;
     
     const adminFields = document.querySelectorAll('#modal-sale-details .manager-only');
-    if (currentRole) {
+    if (isAdmin()) {
       adminFields.forEach(el => el.classList.remove('hidden'));
       document.getElementById('det-alis').textContent = `${formatMoney(sale.alis_fiyati)} ₺`;
       const profitMarginPct = calculateSaleProfitMarginPct(sale);
@@ -1797,8 +1788,8 @@ async function viewSaleDetail() {
           <td>${u.birim}</td>
           <td>${formatMoney(u.birim_fiyat)} ₺</td>
           <td>${formatMoney(u.toplam_tutar)} ₺</td>
-          <td class="manager-col ${currentRole ? '' : 'hidden'}">${u.alis_fiyati > 0 ? formatMoney(u.alis_fiyati) + ' ₺/' + (u.alis_birimi || u.birim) : '-'}</td>
-          <td class="manager-col ${currentRole ? '' : 'hidden'}">${profitText}</td>
+          <td class="manager-col ${isAdmin() ? '' : 'hidden'}">${u.alis_fiyati > 0 ? formatMoney(u.alis_fiyati) + ' ₺/' + (u.alis_birimi || u.birim) : '-'}</td>
+          <td class="manager-col ${isAdmin() ? '' : 'hidden'}">${profitText}</td>
           <td>${u.irsaliye_no || '-'}</td>
           <td>${waybillBtnHtml}</td>
         `;
