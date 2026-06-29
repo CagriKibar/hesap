@@ -274,9 +274,13 @@ function stopIntegratedServer() {
 
 app.whenReady().then(async () => {
   const cfg = loadConfigSync();
-  
-  // Migration: If no database file exists in AppData, copy the existing one from the workspace if available
+
   const defaultDbPath = path.join(userDataPath, 'satis_takip.db');
+  if (!cfg.db_yolu) {
+    cfg.db_yolu = defaultDbPath;
+  }
+
+  // Migration: If no database file exists in AppData, copy the existing one from the workspace if available
   if (cfg.db_yolu === defaultDbPath && !fs.existsSync(defaultDbPath)) {
     const workspaceDb = path.join(__dirname, 'satis_takip.db');
     if (fs.existsSync(workspaceDb)) {
@@ -333,8 +337,12 @@ ipcMain.handle('load-config', () => {
 
 // Save Config
 ipcMain.handle('save-config', async (event, cfg) => {
+  const defaultDbPath = path.join(userDataPath, 'satis_takip.db');
+  if (!cfg.db_yolu && cfg.mod !== 'istemci') {
+    cfg.db_yolu = defaultDbPath;
+  }
   saveConfigSync(cfg);
-  
+
   // Re-init local DB if we switched back to Yerel or Paylasim modes
   if (cfg.mod !== 'istemci') {
     try {
@@ -403,18 +411,42 @@ ipcMain.handle('login', async (event, { username, password }) => {
   if (cfg.mod === 'istemci') {
     return await apiCall('post', '/api/login', { kullanici_adi: username, sifre: password });
   } else {
-    const rows = db.execQuery(
-      "SELECT kullanici_adi, rol, aktif FROM kullanicilar WHERE kullanici_adi=? AND sifre=?",
-      [username, password]
-    );
-    if (rows.length === 0) {
-      throw new Error("Geçersiz kullanıcı adı veya şifre!");
+    try {
+      const rows = db.execQuery(
+        "SELECT kullanici_adi, rol, aktif FROM kullanicilar WHERE kullanici_adi=? AND sifre=?",
+        [username, password]
+      );
+      if (rows.length === 0) {
+        throw new Error("Geçersiz kullanıcı adı veya şifre!");
+      }
+      const user = rows[0];
+      if (user.aktif === 0) {
+        throw new Error("Hesabınız pasif durumda.\nLütfen yöneticinizle iletişime geçin.");
+      }
+      return user;
+    } catch (e) {
+      if (e.message === 'Database not initialized') {
+        const defaultDbPath = path.join(userDataPath, 'satis_takip.db');
+        try {
+          await db.initDatabase(cfg.db_yolu || defaultDbPath);
+          const rows = db.execQuery(
+            "SELECT kullanici_adi, rol, aktif FROM kullanicilar WHERE kullanici_adi=? AND sifre=?",
+            [username, password]
+          );
+          if (rows.length === 0) {
+            throw new Error("Geçersiz kullanıcı adı veya şifre!");
+          }
+          const user = rows[0];
+          if (user.aktif === 0) {
+            throw new Error("Hesabınız pasif durumda.\nLütfen yöneticinizle iletişime geçin.");
+          }
+          return user;
+        } catch (retryErr) {
+          throw new Error("Veritabanı başlatılamadı. Bağlantı ayarlarını kontrol edin.\n" + retryErr.message);
+        }
+      }
+      throw e;
     }
-    const user = rows[0];
-    if (user.aktif === 0) {
-      throw new Error("Hesabınız pasif durumda.\nLütfen yöneticinizle iletişime geçin.");
-    }
-    return user;
   }
 });
 

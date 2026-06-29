@@ -489,11 +489,11 @@ document.querySelectorAll('input[name="conn-mode"]').forEach(radio => {
 function triggerConnectionSubForms(mode) {
   const dbRow = document.getElementById('conn-row-db-path');
   const urlRow = document.getElementById('conn-row-server-url');
-  
+
   dbRow.classList.add('hidden');
   urlRow.classList.add('hidden');
-  
-  if (mode === 'yerel' || mode === 'paylasim') {
+
+  if (mode === 'paylasim') {
     dbRow.classList.remove('hidden');
   } else if (mode === 'istemci') {
     urlRow.classList.remove('hidden');
@@ -517,7 +517,7 @@ async function saveConnectionSettings() {
   const mode = document.querySelector('input[name="conn-mode"]:checked').value;
   let url = document.getElementById('conn-server-url').value.trim();
   let dbPath = document.getElementById('conn-db-path').value.trim();
-  
+
   if (mode === 'paylasim' && !dbPath) {
     alert('Lütfen ağ veritabanı dosya yolunu belirtin.');
     return;
@@ -530,7 +530,6 @@ async function saveConnectionSettings() {
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
       url = 'http://' + url;
     }
-    // Append port if missing
     const urlPart = url.startsWith('http://') ? url.slice(7) : url.slice(8);
     if (!urlPart.includes(':')) {
       url = url.replace(/\/$/, "") + ':8765';
@@ -538,7 +537,14 @@ async function saveConnectionSettings() {
   }
 
   try {
-    await window.api.saveConfig({ mod: mode, db_yolu: dbPath, sunucu_url: url });
+    const existingConfig = await window.api.loadConfig();
+    const newConfig = {
+      ...existingConfig,
+      mod: mode,
+      db_yolu: dbPath || (existingConfig && existingConfig.db_yolu) || '',
+      sunucu_url: url || (existingConfig && existingConfig.sunucu_url) || 'http://127.0.0.1:8765'
+    };
+    await window.api.saveConfig(newConfig);
     alert('Ayarlar başarıyla kaydedildi. Veritabanı bağlantısı yenilendi.');
     closeAllModals();
     await refreshConnectionIndicator();
@@ -1801,9 +1807,9 @@ async function uploadWaybillFile() {
     alert('Lütfen irsaliye yüklemek istediğiniz satışı listeden seçin.');
     return;
   }
-  
+
   try {
-    const destPath = await window.api.uploadWaybill(selectedSaleRowId);
+    const destPath = await window.api.uploadWaybill({ saleId: selectedSaleRowId });
     if (destPath) {
       alert('İrsaliye dosyası başarıyla yüklendi.');
       refreshSalesTable();
@@ -1819,7 +1825,7 @@ async function viewWaybillFile() {
     return;
   }
   try {
-    await window.api.viewWaybill(selectedSaleRowId);
+    await window.api.viewWaybill({ saleId: selectedSaleRowId });
   } catch (err) {
     alert(err.message);
   }

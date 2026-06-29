@@ -20,8 +20,8 @@ contextBridge.exposeInMainWorld('api', {
   deleteSale: (saleId) => ipcRenderer.invoke('delete-sale', saleId),
   
   // Waybills
-  uploadWaybill: (saleId) => ipcRenderer.invoke('upload-waybill', saleId),
-  viewWaybill: (saleId) => ipcRenderer.invoke('view-waybill', saleId),
+  uploadWaybill: (params) => ipcRenderer.invoke('upload-waybill', params),
+  viewWaybill: (params) => ipcRenderer.invoke('view-waybill', params),
   
   // Invoices & Delivery
   uploadInvoice: (saleId) => ipcRenderer.invoke('upload-invoice', saleId),
