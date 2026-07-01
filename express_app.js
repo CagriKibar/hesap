@@ -673,11 +673,11 @@ app.get('/api/bakkal/urunler/barkod/:barkod', (req, res) => {
 
 // Bakkal: Create product
 app.post('/api/bakkal/urunler', (req, res) => {
-  const { barkod, urun_adi, kategori, alis_fiyati, satis_fiyati, stok_miktari, birim } = req.body;
+  const { barkod, urun_adi, kategori, alis_fiyati, satis_fiyati, stok_miktari, birim, gorsel_yolu } = req.body;
   try {
     const lastId = db.execInsert(
-      "INSERT INTO bakkal_urunler (barkod, urun_adi, kategori, alis_fiyati, satis_fiyati, stok_miktari, birim, aktif) VALUES (?,?,?,?,?,?,?,1)",
-      [barkod, urun_adi, kategori, alis_fiyati, satis_fiyati, stok_miktari, birim]
+      "INSERT INTO bakkal_urunler (barkod, urun_adi, kategori, alis_fiyati, satis_fiyati, stok_miktari, birim, gorsel_yolu, aktif) VALUES (?,?,?,?,?,?,?,?,1)",
+      [barkod, urun_adi, kategori, alis_fiyati, satis_fiyati, stok_miktari, birim, gorsel_yolu]
     );
     res.status(201).json({ id: lastId });
   } catch (err) {
@@ -688,11 +688,11 @@ app.post('/api/bakkal/urunler', (req, res) => {
 // Bakkal: Update product
 app.put('/api/bakkal/urunler/:id', (req, res) => {
   const uid = parseInt(req.params.id);
-  const { barkod, urun_adi, kategori, alis_fiyati, satis_fiyati, stok_miktari, birim, aktif } = req.body;
+  const { barkod, urun_adi, kategori, alis_fiyati, satis_fiyati, stok_miktari, birim, gorsel_yolu, aktif } = req.body;
   try {
     db.execRun(
-      "UPDATE bakkal_urunler SET barkod=?, urun_adi=?, kategori=?, alis_fiyati=?, satis_fiyati=?, stok_miktari=?, birim=?, aktif=? WHERE id=?",
-      [barkod, urun_adi, kategori, alis_fiyati, satis_fiyati, stok_miktari, birim, aktif, uid]
+      "UPDATE bakkal_urunler SET barkod=?, urun_adi=?, kategori=?, alis_fiyati=?, satis_fiyati=?, stok_miktari=?, birim=?, gorsel_yolu=?, aktif=? WHERE id=?",
+      [barkod, urun_adi, kategori, alis_fiyati, satis_fiyati, stok_miktari, birim, gorsel_yolu, aktif, uid]
     );
     res.json({ ok: true });
   } catch (err) {

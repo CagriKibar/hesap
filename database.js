@@ -206,9 +206,22 @@ function createSchema() {
       satis_fiyati REAL DEFAULT 0,
       stok_miktari REAL DEFAULT 0,
       birim TEXT DEFAULT 'ADET',
-      aktif INTEGER DEFAULT 1
+      aktif INTEGER DEFAULT 1,
+      gorsel_yolu TEXT
     )
   `);
+
+  // Migration to check if 'gorsel_yolu' column exists in bakkal_urunler
+  try {
+    const columns = execQuery("PRAGMA table_info(bakkal_urunler)");
+    const hasGorsel = columns.some(c => c.name === 'gorsel_yolu');
+    if (!hasGorsel) {
+      dbInstance.run("ALTER TABLE bakkal_urunler ADD COLUMN gorsel_yolu TEXT");
+      saveToDisk();
+    }
+  } catch (e) {
+    console.error("Migration error (bakkal_urunler):", e);
+  }
 
   // 5. Bakkal Sales Table
   dbInstance.run(`
@@ -242,7 +255,8 @@ function createSchema() {
     const defaults = [
       ["superadmin", "super123", "Süper Admin"],
       ["admin", "admin123", "Yönetici"],
-      ["satis", "satis123", "Personel"]
+      ["satis", "satis123", "Personel"],
+      ["bakkal", "bakkal123", "Bakkal"]
     ];
     for (const [name, pass, role] of defaults) {
       dbInstance.run(
@@ -251,6 +265,19 @@ function createSchema() {
       );
     }
     saveToDisk();
+  } else {
+    // Ensure default 'bakkal' user exists even if table wasn't empty
+    try {
+      const bakkalCount = execQuery("SELECT COUNT(*) as count FROM kullanicilar WHERE kullanici_adi = 'bakkal'")[0].count;
+      if (bakkalCount === 0) {
+        dbInstance.run(
+          "INSERT INTO kullanicilar (kullanici_adi, sifre, rol, aktif) VALUES ('bakkal', 'bakkal123', 'Bakkal', 1)"
+        );
+        saveToDisk();
+      }
+    } catch (e) {
+      console.error("Failed to ensure bakkal user exists:", e);
+    }
   }
 
   // Insert default settings if table is empty

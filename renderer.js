@@ -368,6 +368,8 @@ document.addEventListener('DOMContentLoaded', () => {
   safeOn('btn-add-bakkal-product', 'click', openAddBakkalProductModal);
   safeOn('btn-refresh-bakkal-products', 'click', refreshBakkalProductsTable);
   safeOn('btn-save-bakkal-product', 'click', saveBakkalProduct);
+  safeOn('btn-select-bakkal-gorsel', 'click', handleSelectBakkalProductGorsel);
+  safeOn('btn-clear-bakkal-gorsel', 'click', handleClearBakkalProductGorsel);
   const urunSearch = document.getElementById('urun-yonetimi-search');
   if (urunSearch) {
     let deb = null;
@@ -601,8 +603,23 @@ async function handleLogin() {
     document.getElementById('current-user-name').textContent = currentUser;
     document.getElementById('current-user-role').textContent = currentRole;
     
-    // Trigger first calculation
-    runCumulativePriceCalculation();
+    if (currentRole === 'Bakkal') {
+      // Deactivate all
+      document.querySelectorAll('.tab-link').forEach(btn => btn.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.remove('active'));
+      
+      // Activate tab-pos
+      const posTabBtn = document.getElementById('nav-btn-pos');
+      if (posTabBtn) posTabBtn.classList.add('active');
+      const posPanel = document.getElementById('tab-pos');
+      if (posPanel) posPanel.classList.add('active');
+      
+      posLoadProducts();
+      setTimeout(() => { const s = document.getElementById('pos-search'); if (s) s.focus(); }, 100);
+    } else {
+      // Trigger first calculation
+      runCumulativePriceCalculation();
+    }
   } catch (err) {
     alert(`Giriş Hatası:\n${err.message}`);
     const passInput = document.getElementById('login-password');
@@ -644,6 +661,7 @@ function isAdmin() {
 function setupRoleUIViews() {
   const admin = isAdmin();
   const superAdmin = currentRole === 'Süper Admin';
+  const bakkal = currentRole === 'Bakkal';
 
   // === TAB VISIBILITY ===
   const showTab = (id, visible) => {
@@ -651,9 +669,12 @@ function setupRoleUIViews() {
     if (el) { if (visible) el.classList.remove('hidden'); else el.classList.add('hidden'); }
   };
 
-  showTab('nav-btn-pos', true);
+  showTab('nav-btn-hesapla', !bakkal);
+  showTab('nav-btn-hareketler', !bakkal);
+  showTab('nav-btn-gecmis', !bakkal);
+  showTab('nav-btn-pos', bakkal || admin || currentRole === 'Personel');
+  showTab('nav-btn-urun-yonetimi', admin || bakkal);
   showTab('nav-btn-kullanicilar', admin);
-  showTab('nav-btn-urun-yonetimi', admin);
   showTab('nav-btn-sunucu', superAdmin);
 
   // === SUNUCU TAB: Only Süper Admin ===
@@ -680,12 +701,13 @@ function setupRoleUIViews() {
   const connBtn = document.getElementById('server-btn-change-conn');
   if (connBtn) { if (admin) connBtn.removeAttribute('disabled'); else connBtn.setAttribute('disabled', 'true'); }
 
-  // === ALIS FİYATI, KÂR, MANAGER KOLONLARI: Only admin ===
+  // === ALIS FİYATI, KÂR, MANAGER KOLONLARI: Only admin or bakkal ===
+  const showManager = admin || bakkal;
   document.querySelectorAll('.manager-only').forEach(el => {
-    if (admin) el.classList.remove('hidden'); else el.classList.add('hidden');
+    if (showManager) el.classList.remove('hidden'); else el.classList.add('hidden');
   });
   document.querySelectorAll('.manager-col').forEach(el => {
-    if (admin) el.classList.remove('hidden'); else el.classList.add('hidden');
+    if (showManager) el.classList.remove('hidden'); else el.classList.add('hidden');
   });
 
   const purchasePriceInput = document.getElementById('purchase-price');
@@ -712,9 +734,9 @@ function setupRoleUIViews() {
     if (el) { if (admin) el.removeAttribute('disabled'); else el.setAttribute('disabled', 'true'); }
   });
 
-  // === BAKKAL ÜRÜN YÖNETİMİ BUTONLARI: Only admin ===
+  // === BAKKAL ÜRÜN YÖNETİMİ BUTONLARI: Admin or Bakkal ===
   const addProdBtn = document.getElementById('btn-add-bakkal-product');
-  if (addProdBtn) { if (admin) addProdBtn.classList.remove('hidden'); else addProdBtn.classList.add('hidden'); }
+  if (addProdBtn) { if (admin || bakkal) addProdBtn.classList.remove('hidden'); else addProdBtn.classList.add('hidden'); }
 }
 
 // ==================== TAB 1: PRICING CALCULATION ====================
@@ -2480,14 +2502,30 @@ function posFilterProducts() {
     const stockClass = p.stok_miktari <= 0 ? 'out-of-stock' : p.stok_miktari < 5 ? 'low-stock' : '';
     const card = document.createElement('div');
     card.className = `pos-product-card ${stockClass}`;
+    const cardImgId = `pos-img-${p.id}`;
+
     card.innerHTML = `
-      <span class="pos-prod-icon">${icon}</span>
+      <div id="${cardImgId}">
+        <div class="pos-prod-image-placeholder">${icon}</div>
+      </div>
       <span class="pos-prod-name" title="${p.urun_adi}">${p.urun_adi}</span>
       <span class="pos-prod-price">${formatMoney(p.satis_fiyati)} ₺</span>
       <span class="pos-prod-stock">Stok: ${p.stok_miktari} ${p.birim}</span>
     `;
     card.addEventListener('click', () => posAddToCart(p));
     grid.appendChild(card);
+
+    // Load image asynchronously if exists
+    if (p.gorsel_yolu) {
+      window.api.readImageBase64(p.gorsel_yolu).then(base64 => {
+        if (base64) {
+          const imgContainer = document.getElementById(cardImgId);
+          if (imgContainer) {
+            imgContainer.innerHTML = `<img src="${base64}" class="pos-prod-image" alt="${p.urun_adi}">`;
+          }
+        }
+      });
+    }
   });
 }
 
@@ -2666,27 +2704,38 @@ async function refreshBakkalProductsTable() {
   const search = (document.getElementById('urun-yonetimi-search').value || '').trim();
   const cat = document.getElementById('urun-yonetimi-category').value;
   const tbody = document.querySelector('#bakkal-products-table tbody');
-  tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;">Yükleniyor...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;">Yükleniyor...</td></tr>';
 
   try {
     let list = await window.api.getBakkalProducts(search);
     if (cat) list = list.filter(p => p.kategori === cat);
     tbody.innerHTML = '';
     if (list.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;">Ürün bulunamadı.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;">Ürün bulunamadı.</td></tr>';
       return;
     }
     list.forEach(p => {
       const tr = document.createElement('tr');
-      const stockClass = p.stok_miktari <= 0 ? 'style="color:#e74c3c;font-weight:700;"' : p.stok_miktari < 5 ? 'style="color:#e17055;font-weight:600;"' : '';
+      const stockStyle = p.stok_miktari <= 0 ? 'style="color:#e74c3c;font-weight:700;"' : p.stok_miktari < 5 ? 'style="color:#e17055;font-weight:600;"' : '';
+      const icon = CATEGORY_ICONS[p.kategori] || '📦';
+      const gorselId = `table-img-${p.id}`;
+
+      const isManager = isAdmin() || currentRole === 'Bakkal';
+      const managerColStyle = isManager ? '' : 'class="manager-col hidden"';
+
       tr.innerHTML = `
         <td>${p.id}</td>
+        <td>
+          <div id="${gorselId}">
+            <div class="prod-table-thumb-placeholder">${icon}</div>
+          </div>
+        </td>
         <td>${p.barkod || '-'}</td>
         <td><strong>${p.urun_adi}</strong></td>
         <td>${p.kategori}</td>
-        <td class="manager-col">${formatMoney(p.alis_fiyati)} ₺</td>
+        <td ${managerColStyle}>${formatMoney(p.alis_fiyati)} ₺</td>
         <td><strong>${formatMoney(p.satis_fiyati)} ₺</strong></td>
-        <td ${stockClass}>${p.stok_miktari}</td>
+        <td ${stockStyle}>${p.stok_miktari}</td>
         <td>${p.birim}</td>
         <td>
           <div class="row-actions">
@@ -2696,9 +2745,21 @@ async function refreshBakkalProductsTable() {
         </td>
       `;
       tbody.appendChild(tr);
+
+      // Async load image base64
+      if (p.gorsel_yolu) {
+        window.api.readImageBase64(p.gorsel_yolu).then(base64 => {
+          if (base64) {
+            const container = document.getElementById(gorselId);
+            if (container) {
+              container.innerHTML = `<img class="prod-table-thumb" src="${base64}" alt="${p.urun_adi}">`;
+            }
+          }
+        });
+      }
     });
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--danger-color);">Hata: ${e.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;color:var(--danger-color);">Hata: ${e.message}</td></tr>`;
   }
 }
 
@@ -2712,6 +2773,15 @@ function openAddBakkalProductModal() {
   document.getElementById('bakkal-prod-stok').value = '0';
   document.getElementById('bakkal-prod-alis').value = '';
   document.getElementById('bakkal-prod-satis').value = '';
+
+  // Clear image fields
+  document.getElementById('bakkal-prod-gorsel-yolu').value = '';
+  const imgPreview = document.getElementById('bakkal-prod-gorsel-preview');
+  imgPreview.src = '';
+  imgPreview.classList.add('hidden');
+  document.getElementById('bakkal-prod-gorsel-no-img').classList.remove('hidden');
+  document.getElementById('btn-clear-bakkal-gorsel').classList.add('hidden');
+
   openModal('modal-bakkal-product');
 }
 
@@ -2729,6 +2799,34 @@ async function openEditBakkalProduct(pid) {
     document.getElementById('bakkal-prod-stok').value = p.stok_miktari || 0;
     document.getElementById('bakkal-prod-alis').value = p.alis_fiyati || '';
     document.getElementById('bakkal-prod-satis').value = p.satis_fiyati || '';
+
+    // Set image fields
+    const gorselYolu = p.gorsel_yolu || '';
+    document.getElementById('bakkal-prod-gorsel-yolu').value = gorselYolu;
+    const imgPreview = document.getElementById('bakkal-prod-gorsel-preview');
+    const noImgSpan = document.getElementById('bakkal-prod-gorsel-no-img');
+    const clearBtn = document.getElementById('btn-clear-bakkal-gorsel');
+
+    if (gorselYolu) {
+      const base64 = await window.api.readImageBase64(gorselYolu);
+      if (base64) {
+        imgPreview.src = base64;
+        imgPreview.classList.remove('hidden');
+        noImgSpan.classList.add('hidden');
+        clearBtn.classList.remove('hidden');
+      } else {
+        imgPreview.src = '';
+        imgPreview.classList.add('hidden');
+        noImgSpan.classList.remove('hidden');
+        clearBtn.classList.add('hidden');
+      }
+    } else {
+      imgPreview.src = '';
+      imgPreview.classList.add('hidden');
+      noImgSpan.classList.remove('hidden');
+      clearBtn.classList.add('hidden');
+    }
+
     openModal('modal-bakkal-product');
   } catch (e) {
     alert('Ürün bilgileri yüklenemedi: ' + e.message);
@@ -2751,7 +2849,8 @@ async function saveBakkalProduct() {
     birim: document.getElementById('bakkal-prod-birim').value,
     stok_miktari: parseFloat(document.getElementById('bakkal-prod-stok').value.replace(',', '.')) || 0,
     alis_fiyati: parseFloat(document.getElementById('bakkal-prod-alis').value.replace(',', '.')) || 0,
-    satis_fiyati: satis_fiyati
+    satis_fiyati: satis_fiyati,
+    gorsel_yolu: document.getElementById('bakkal-prod-gorsel-yolu').value || null
   };
 
   try {
@@ -2781,3 +2880,31 @@ async function deleteBakkalProduct(pid, name) {
   }
 }
 window.deleteBakkalProduct = deleteBakkalProduct;
+
+async function handleSelectBakkalProductGorsel() {
+  try {
+    const destPath = await window.api.selectProductImage();
+    if (destPath) {
+      document.getElementById('bakkal-prod-gorsel-yolu').value = destPath;
+      const base64 = await window.api.readImageBase64(destPath);
+      if (base64) {
+        const imgPreview = document.getElementById('bakkal-prod-gorsel-preview');
+        imgPreview.src = base64;
+        imgPreview.classList.remove('hidden');
+        document.getElementById('bakkal-prod-gorsel-no-img').classList.add('hidden');
+        document.getElementById('btn-clear-bakkal-gorsel').classList.remove('hidden');
+      }
+    }
+  } catch (e) {
+    alert('Resim seçilemedi: ' + e.message);
+  }
+}
+
+function handleClearBakkalProductGorsel() {
+  document.getElementById('bakkal-prod-gorsel-yolu').value = '';
+  const imgPreview = document.getElementById('bakkal-prod-gorsel-preview');
+  imgPreview.src = '';
+  imgPreview.classList.add('hidden');
+  document.getElementById('bakkal-prod-gorsel-no-img').classList.remove('hidden');
+  document.getElementById('btn-clear-bakkal-gorsel').classList.add('hidden');
+}

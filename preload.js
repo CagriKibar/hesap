@@ -79,5 +79,9 @@ contextBridge.exposeInMainWorld('api', {
   // Bakkal - POS Sales
   createBakkalSale: (data) => ipcRenderer.invoke('create-bakkal-sale', data),
   getBakkalSales: () => ipcRenderer.invoke('get-bakkal-sales'),
-  getBakkalSaleDetails: (id) => ipcRenderer.invoke('get-bakkal-sale-details', id)
+  getBakkalSaleDetails: (id) => ipcRenderer.invoke('get-bakkal-sale-details', id),
+
+  // Bakkal - Image Management
+  selectProductImage: () => ipcRenderer.invoke('select-product-image'),
+  readImageBase64: (path) => ipcRenderer.invoke('read-image-base64', path)
 });

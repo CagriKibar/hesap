@@ -14,12 +14,20 @@ let mainWindow = null;
 let localServerInstance = null;
 let localServerPort = 8765;
 
-const userDataPath = app.getPath('userData');
-const CONFIG_FILE = path.join(userDataPath, 'config.json');
+let userDataPath = '';
+let CONFIG_FILE = '';
+
+function ensureUserDataPath() {
+  if (!userDataPath) {
+    userDataPath = app.getPath('userData');
+    CONFIG_FILE = path.join(userDataPath, 'config.json');
+  }
+}
 
 // --- Helper Functions ---
 
 function loadConfigSync() {
+  ensureUserDataPath();
   const defaults = {
     mod: 'yerel', // yerel | paylasim | istemci
     db_yolu: path.join(userDataPath, 'satis_takip.db'),
@@ -337,6 +345,7 @@ ipcMain.handle('load-config', () => {
 
 // Save Config
 ipcMain.handle('save-config', async (event, cfg) => {
+  ensureUserDataPath();
   const defaultDbPath = path.join(userDataPath, 'satis_takip.db');
   if (!cfg.db_yolu && cfg.mod !== 'istemci') {
     cfg.db_yolu = defaultDbPath;
@@ -2309,8 +2318,8 @@ ipcMain.handle('add-bakkal-product', async (event, data) => {
     return await apiCall('post', '/api/bakkal/urunler', data);
   } else {
     const lastId = db.execInsert(
-      "INSERT INTO bakkal_urunler (barkod, urun_adi, kategori, alis_fiyati, satis_fiyati, stok_miktari, birim, aktif) VALUES (?,?,?,?,?,?,?,1)",
-      [data.barkod, data.urun_adi, data.kategori, data.alis_fiyati, data.satis_fiyati, data.stok_miktari, data.birim]
+      "INSERT INTO bakkal_urunler (barkod, urun_adi, kategori, alis_fiyati, satis_fiyati, stok_miktari, birim, gorsel_yolu, aktif) VALUES (?,?,?,?,?,?,?,?,1)",
+      [data.barkod, data.urun_adi, data.kategori, data.alis_fiyati, data.satis_fiyati, data.stok_miktari, data.birim, data.gorsel_yolu]
     );
     return { id: lastId };
   }
@@ -2322,8 +2331,8 @@ ipcMain.handle('edit-bakkal-product', async (event, { id, data }) => {
     return await apiCall('put', `/api/bakkal/urunler/${id}`, data);
   } else {
     db.execRun(
-      "UPDATE bakkal_urunler SET barkod=?, urun_adi=?, kategori=?, alis_fiyati=?, satis_fiyati=?, stok_miktari=?, birim=? WHERE id=?",
-      [data.barkod, data.urun_adi, data.kategori, data.alis_fiyati, data.satis_fiyati, data.stok_miktari, data.birim, id]
+      "UPDATE bakkal_urunler SET barkod=?, urun_adi=?, kategori=?, alis_fiyati=?, satis_fiyati=?, stok_miktari=?, birim=?, gorsel_yolu=? WHERE id=?",
+      [data.barkod, data.urun_adi, data.kategori, data.alis_fiyati, data.satis_fiyati, data.stok_miktari, data.birim, data.gorsel_yolu, id]
     );
     return { ok: true };
   }
@@ -2378,5 +2387,56 @@ ipcMain.handle('get-bakkal-sale-details', async (event, id) => {
     const sale = rows[0];
     sale.kalemler = db.execQuery("SELECT * FROM bakkal_satis_kalemleri WHERE satis_id=?", [id]);
     return sale;
+  }
+});
+
+// Image Selection Dialog & Base64 Reading
+ipcMain.handle('select-product-image', async () => {
+  ensureUserDataPath();
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Ürün Görseli Seçin',
+    filters: [
+      { name: 'Resimler', extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp'] }
+    ],
+    properties: ['openFile']
+  });
+
+  if (result.canceled || result.filePaths.length === 0) {
+    return null;
+  }
+
+  const sourcePath = result.filePaths[0];
+  const ext = path.extname(sourcePath);
+  const fileName = `urun_${Date.now()}${ext}`;
+
+  const cfg = loadConfigSync();
+  let gorselFolder = path.join(userDataPath, 'urun_gorselleri');
+  if (cfg.mod !== 'istemci' && cfg.db_yolu) {
+    gorselFolder = path.join(path.dirname(cfg.db_yolu), 'urun_gorselleri');
+  }
+
+  if (!fs.existsSync(gorselFolder)) {
+    fs.mkdirSync(gorselFolder, { recursive: true });
+  }
+
+  const destPath = path.join(gorselFolder, fileName);
+  fs.copyFileSync(sourcePath, destPath);
+
+  return destPath;
+});
+
+ipcMain.handle('read-image-base64', async (event, imagePath) => {
+  if (!imagePath || !fs.existsSync(imagePath)) return null;
+  try {
+    const data = fs.readFileSync(imagePath);
+    const ext = path.extname(imagePath).toLowerCase().replace('.', '');
+    let mime = 'image/jpeg';
+    if (ext === 'png') mime = 'image/png';
+    else if (ext === 'gif') mime = 'image/gif';
+    else if (ext === 'webp') mime = 'image/webp';
+    return `data:${mime};base64,${data.toString('base64')}`;
+  } catch (err) {
+    console.error('Error reading image base64:', err);
+    return null;
   }
 });
